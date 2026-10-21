@@ -98,7 +98,8 @@ class Transaction(models.Model):
 
     # --- Currency & rate ----------------------------------------------------
     currency = models.CharField('نوع ارز', max_length=3, choices=Currency.choices, default=Currency.USD)
-    exchange_rate = models.DecimalField('نرخ اسعار', max_digits=14, decimal_places=4, default=1,
+    # 8 decimals so tiny rates (e.g. 1 IRR ≈ 0.0016 AFN) keep their precision.
+    exchange_rate = models.DecimalField('نرخ اسعار', max_digits=14, decimal_places=8, default=1,
                                         help_text='یک واحد این ارز چند افغانی است (برای افغانی همیشه ۱)')
 
     # --- Expenses (all deducted from the balance) ---------------------------

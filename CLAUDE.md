@@ -98,6 +98,10 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
 - مدل User و Branch سفارشی حتماً قبل از اولین migration ساخته شوند.
 - همه فیلدهای پولی `DecimalField(max_digits=14, decimal_places=2)`. هرگز
   FloatField نگذار.
+- همه فیلدهای **نرخ اسعار** `DecimalField(max_digits=14, decimal_places=8)`
+  (تا نرخ‌های خیلی کوچک مثل تومان ≈ 0.0016 افغانی دقیق بمانند). این قانون
+  برای `Transaction.exchange_rate` اعمال شده و در مرحلهٔ ۴ برای نرخ‌های
+  `ExchangeRate`، `Hawala` و `OfficeExpense` هم باید اعمال شود.
 - همه رازها در `.env` با python-decouple. هرگز هارد‌کد نکن.
 - هر مدل، هر فیلد، هر choice باید `verbose_name` دری داشته باشد — ادمین
   کاملاً دری باشد.
@@ -134,6 +138,11 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
 ## وضعیت فعلی (در هر مرحله به‌روز می‌شود)
 - [x] مرحلهٔ ۰: راه‌اندازی + Branch + User + ادمین دری + برندینگ
 - [x] مرحلهٔ ۱: Trader + TransportCompany
-- [ ] نصب MySQL و اجرای مایگریشن روی دیتابیس واقعی
-- [ ] مرحلهٔ ۲: تاریخچهٔ کامل (Audit Log)
+- [x] نصب MySQL و اجرای مایگریشن روی دیتابیس واقعی
+- [x] مرحلهٔ ۲: تاریخچهٔ کامل (Audit Log)
+- [x] مرحلهٔ ۳: Transaction + Document (منطق یگانه عاید)؛ `exchange_rate` با ۸ رقم اعشار
+- [ ] مرحلهٔ ۴: اپ `finance` — ExchangeRate, Hawala, OfficeExpense
+  - همه فیلدهای نرخ: `DecimalField(max_digits=14, decimal_places=8)`
+  - قفل نرخ روزانه (HTTP 428 / `TODAY_RATE_MISSING`)
+  - `Transaction.fee_per_dollar_afn` برای ارزهای غیر دالر از ExchangeRate خوانده شود
 - [ ] فاز دوم: Transaction، FieldConfig، نرخ، فرانت (بعد از رسیدن اکسل جدید)
