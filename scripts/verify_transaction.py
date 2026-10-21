@@ -119,7 +119,7 @@ try:
         if saved:
             check('admin values parsed', saved.customer_payment == Decimal('1200.50') and saved.balance == Decimal('1000.50'),
                   f'payment={saved.customer_payment}, balance={saved.balance}')
-            check('plate kept exactly as typed', saved.plate_afghan == 'کابل ۱۲۳', repr(saved.plate_afghan))
+            check('plate digits normalized to English', saved.plate_afghan == 'کابل 123', repr(saved.plate_afghan))
             check('created_by + history user recorded',
                   saved.created_by == admin_user and saved.history.first().history_user == admin_user)
             pages = [f'/admin/operations/transaction/{saved.pk}/change/', '/admin/operations/transaction/',

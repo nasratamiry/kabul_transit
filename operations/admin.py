@@ -17,7 +17,7 @@ def _money(value):
 class TransactionForm(DigitNormalizingModelForm):
     digit_fields = (
         'serial_number', 'date', 't1_number', 't2_number', 'cmr_number', 'mafi_number', 'exit_slip_number',
-        'driver_phone', 'bank_tariff_slip_number',
+        'plate_afghan', 'plate_foreign', 'driver_phone', 'bank_tariff_slip_number',
         'scale_ticket_number', 'seal_number',
     )
 
