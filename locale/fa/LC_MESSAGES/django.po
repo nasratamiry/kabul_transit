@@ -1,0 +1,79 @@
+# Dari labels for django-simple-history (the package ships no Persian/Dari translation).
+# Compile to django.mo with: python manage.py compilemessages  (needs GNU gettext)
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fa\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "View history: %s"
+msgstr "مشاهده تاریخچه: %s"
+
+msgid "Change history: %s"
+msgstr "تاریخچه تغییرات: %s"
+
+msgid "The %(name)s \"%(obj)s\" was changed successfully."
+msgstr "%(name)s «%(obj)s» با موفقیت تغییر کرد."
+
+msgid "You may edit it again below"
+msgstr "می‌توانید در پایین دوباره آن را ویرایش کنید"
+
+msgid "View %s"
+msgstr "مشاهده %s"
+
+msgid "Revert %s"
+msgstr "برگرداندن %s"
+
+msgid "Created"
+msgstr "ایجاد شد"
+
+msgid "Changed"
+msgstr "تغییر کرد"
+
+msgid "Deleted"
+msgstr "حذف شد"
+
+msgid "This object doesn't have a change history."
+msgstr "این مورد هنوز تاریخچه تغییرات ندارد."
+
+msgid "Home"
+msgstr "خانه"
+
+msgid "History"
+msgstr "تاریخچه"
+
+msgid "View %(verbose_name)s"
+msgstr "مشاهده %(verbose_name)s"
+
+msgid "Revert %(verbose_name)s"
+msgstr "برگرداندن %(verbose_name)s"
+
+msgid "Press the 'Change History' button below to edit the history."
+msgstr "برای برگرداندن به این نسخه، دکمه «برگرداندن به این نسخه» را در پایین بزنید."
+
+msgid "Object"
+msgstr "مورد"
+
+msgid "Date/time"
+msgstr "تاریخ و زمان"
+
+msgid "Comment"
+msgstr "نوع تغییر"
+
+msgid "Changed by"
+msgstr "تغییر توسط"
+
+msgid "Change reason"
+msgstr "دلیل تغییر"
+
+msgid "None"
+msgstr "هیچ"
+
+msgid "Revert"
+msgstr "برگرداندن"
+
+msgid "Change History"
+msgstr "برگرداندن به این نسخه"
+
+msgid "Close"
+msgstr "بستن"

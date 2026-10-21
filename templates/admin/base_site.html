@@ -1,0 +1,18 @@
+{% extends 'admin/base.html' %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  :root {
+    --kc-primary: {{ brand.PRIMARY }};
+    --kc-primary-600: {{ brand.PRIMARY_600 }};
+    --kc-primary-50: {{ brand.PRIMARY_50 }};
+    --kc-secondary: {{ brand.SECONDARY }};
+    --kc-accent: {{ brand.ACCENT }};
+    --kc-ink: {{ brand.INK }};
+    --kc-bg: {{ brand.BG }};
+    --kc-font-fa: '{{ brand.FONT_FA_PS }}';
+    --kc-font-en: '{{ brand.FONT_EN }}';
+  }
+</style>
+{% endblock %}

@@ -1,0 +1,25 @@
+/* Kabul Cargo admin skin. Color values come from kabulcargo_backend/branding.py
+   (injected as CSS variables by templates/admin/base_site.html). */
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&family=Inter:wght@400;500;700&display=swap');
+
+body, .content-wrapper, .main-sidebar, .navbar, input, select, textarea, button {
+  font-family: var(--kc-font-fa, 'Vazirmatn'), var(--kc-font-en, 'Inter'), system-ui, sans-serif !important;
+}
+body, .content-wrapper { color: var(--kc-ink); }
+
+.main-sidebar, .sidebar-dark-primary { background-color: var(--kc-primary) !important; }
+.sidebar-dark-primary .nav-sidebar > .nav-item > .nav-link.active,
+.sidebar-dark-primary .nav-treeview > .nav-item > .nav-link.active {
+  background-color: var(--kc-accent) !important;
+  color: #fff !important;
+}
+.brand-link { background-color: var(--kc-bg) !important; }
+.brand-link .brand-text { color: var(--kc-primary) !important; font-weight: 700; }
+
+.btn-primary, .bg-primary { background-color: var(--kc-primary) !important; border-color: var(--kc-primary) !important; }
+.btn-primary:hover { background-color: var(--kc-primary-600) !important; }
+.btn-secondary { background-color: var(--kc-secondary) !important; border-color: var(--kc-secondary) !important; color: #fff !important; }
+a { color: var(--kc-primary); }
+a:hover { color: var(--kc-accent); }
+.card-primary.card-outline { border-top-color: var(--kc-accent) !important; }
+.login-logo img, .brand-image { max-height: 48px; width: auto; }
