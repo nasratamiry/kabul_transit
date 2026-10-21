@@ -141,8 +141,8 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
 - [x] نصب MySQL و اجرای مایگریشن روی دیتابیس واقعی
 - [x] مرحلهٔ ۲: تاریخچهٔ کامل (Audit Log)
 - [x] مرحلهٔ ۳: Transaction + Document (منطق یگانه عاید)؛ `exchange_rate` با ۸ رقم اعشار
-- [ ] مرحلهٔ ۴: اپ `finance` — ExchangeRate, Hawala, OfficeExpense
-  - همه فیلدهای نرخ: `DecimalField(max_digits=14, decimal_places=8)`
-  - قفل نرخ روزانه (HTTP 428 / `TODAY_RATE_MISSING`)
-  - `Transaction.fee_per_dollar_afn` برای ارزهای غیر دالر از ExchangeRate خوانده شود
+- [x] مرحلهٔ ۴: ExchangeRate + Hawala + OfficeExpense + قفل نرم نرخ روز
+  - قفل نرم فعلاً فقط در پنل ادمین (ریدایرکت به فورم نرخ)؛ API (HTTP 428) در مرحلهٔ ۶
+  - [ ] باقی‌مانده: `Transaction.fee_per_dollar_afn` برای ارزهای غیر دالر از
+    ExchangeRate خوانده شود (فعلاً None است)
 - [ ] فاز دوم: Transaction، FieldConfig، نرخ، فرانت (بعد از رسیدن اکسل جدید)

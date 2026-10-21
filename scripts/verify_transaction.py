@@ -24,6 +24,8 @@ from django.db import transaction  # noqa: E402
 from django.test import Client  # noqa: E402
 
 from accounts.models import Branch, User  # noqa: E402
+from finance.models import ExchangeRate  # noqa: E402
+from finance.utils import kabul_today  # noqa: E402
 from operations.models import Transaction  # noqa: E402
 from partners.models import Trader, TransportCompany  # noqa: E402
 
@@ -100,6 +102,8 @@ try:
               Transaction(customer_payment=10, customer_balance=999, currency='AFN').total_expense == 0)
 
         print('۸. فورم پنل مدیریت با ارقام دری')
+        # the daily-rate soft lock needs today's USD rate before any new record
+        ExchangeRate.objects.get_or_create(date=kabul_today(), currency='USD', defaults={'rate': Decimal('70')})
         admin_user = User.objects.create_superuser('zz_verify_admin', None, 'Verify-Pass-123')
         client = Client(HTTP_HOST='127.0.0.1')
         client.force_login(admin_user)

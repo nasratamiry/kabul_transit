@@ -7,6 +7,8 @@ from simple_history.admin import SimpleHistoryAdmin
 from kabulcargo_backend.forms import DigitNormalizingModelForm
 from kabulcargo_backend.utils import dual_date
 
+from finance.admin import TodayRateRequiredAdminMixin
+
 from .models import Document, Transaction
 
 
@@ -40,7 +42,7 @@ class DocumentInline(admin.TabularInline):
 
 
 @admin.register(Transaction)
-class TransactionAdmin(SimpleHistoryAdmin):
+class TransactionAdmin(TodayRateRequiredAdminMixin, SimpleHistoryAdmin):
     form = TransactionForm
     inlines = [DocumentInline]
     formfield_overrides = {jmodels.jDateField: {'widget': AdminjDateWidget}}
