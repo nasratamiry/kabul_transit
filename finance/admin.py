@@ -1,5 +1,6 @@
 from urllib.parse import urlencode
 
+from django import forms
 from django.contrib import admin, messages
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -12,7 +13,7 @@ from simple_history.admin import SimpleHistoryAdmin
 from kabulcargo_backend.forms import DigitNormalizingModelForm
 from kabulcargo_backend.utils import dual_date
 
-from .models import ExchangeRate, Hawala, OfficeExpense
+from .models import ExchangeRate, Hawala, OfficeExpense, StatementLine, statement_source_choices
 from .utils import TodayRateMissing, get_todays_usd_rate
 
 
@@ -142,3 +143,43 @@ class OfficeExpenseAdmin(TodayRateRequiredAdminMixin, CreatedByAdminMixin, Simpl
     def amount_afn_display(self, obj):
         val = obj.amount_afn
         return f'{val:,.2f} AFN' if val is not None else '— (نرخ آن روز موجود نیست)'
+
+
+# ---------------------------------------------------------------------------
+# StatementLine (income statement) — super admin only
+# ---------------------------------------------------------------------------
+class StatementLineForm(forms.ModelForm):
+    source_field = forms.ChoiceField(label='منبع مبلغ', choices=statement_source_choices,
+                                     help_text=StatementLine._meta.get_field('source_field').help_text)
+
+    class Meta:
+        model = StatementLine
+        fields = '__all__'
+
+
+@admin.register(StatementLine)
+class StatementLineAdmin(SimpleHistoryAdmin):
+    form = StatementLineForm
+    list_display = ('label_fa', 'code', 'section', 'source_field', 'sort_order', 'is_active')
+    list_editable = ('sort_order', 'is_active')
+    list_filter = ('section', 'is_active')
+    search_fields = ('code', 'label_fa', 'label_en')
+    ordering = ('sort_order', 'code')
+    fieldsets = (
+        ('سطر', {'fields': ('section', 'code', 'label_fa', 'label_en')}),
+        ('مبلغ', {'fields': ('source_field',),
+                  'description': 'عاید فقط «پرداخت مشتری» است؛ همه منابع دیگر مصرف هستند.'}),
+        ('نمایش', {'fields': ('sort_order', 'is_active')}),
+    )
+
+    def _is_super_admin(self, request):
+        return getattr(request.user, 'is_super_admin', False)
+
+    def has_add_permission(self, request):
+        return self._is_super_admin(request)
+
+    def has_change_permission(self, request, obj=None):
+        return self._is_super_admin(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return self._is_super_admin(request)

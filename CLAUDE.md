@@ -163,4 +163,13 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
     `CONVERT_TZ` تهی برمی‌گرداند و فیلترهای تاریخ پنل خراب می‌شوند.
   - production: `settings_production.py` + `createcachetable` (یا Redis).
   - CSP پنل ادمین عمداً `'unsafe-inline'` برای script دارد (Jazzmin)؛ API سخت است.
+- [x] مرحلهٔ ۸: صورت حساب عاید IAS 1 (StatementLine، `finance/reports.py`، API)
+  - ساختن: `GET /api/income-statement/?branch=3&date_from=1405-07-01&date_to=1405-07-30`
+    (بدون تاریخ = ماه جاری شمسی؛ سوپر ادمین بدون branch = همهٔ بندرها)
+  - سطرها: `python manage.py seed_statement_lines` (سطرهای موجود دست نمی‌خورند؛
+    `--reset` پیش‌فرض‌ها را برمی‌گرداند). هر فیلد مصرف معامله باید دقیقاً در یک سطر
+    فعال باشد، ورنه گزارش هشدار می‌دهد.
+  - دالر: معاملهٔ دالری = مبلغ خودش؛ ارزهای دیگر = افغانی ÷ نرخ دالرِ تاریخِ معامله
+    (یا آخرین نرخ قبل از آن). هرگز نرخ امروز.
+  - آزمایش: `.venv\Scripts\python scripts\verify_statement.py` (۳۶ تست)
 - [ ] فاز دوم: Transaction، FieldConfig، نرخ، فرانت (بعد از رسیدن اکسل جدید)
