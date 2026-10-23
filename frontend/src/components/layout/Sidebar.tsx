@@ -10,6 +10,7 @@ import {
   Users,
   Wallet,
   Handshake,
+  Truck,
   X,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -29,8 +30,13 @@ const MAIN: NavItem[] = [
   { label: 'nav.dashboard', icon: LayoutDashboard, to: '/dashboard' },
   { label: 'nav.transactions', icon: ArrowLeftRight },
   { label: 'nav.finance', icon: Wallet },
-  { label: 'nav.partners', icon: Handshake },
   { label: 'nav.income_statement', icon: FileBarChart },
+];
+
+// Company-wide data: both roles read and edit it.
+const PARTNERS: NavItem[] = [
+  { label: 'nav.traders', icon: Handshake, to: '/partners/traders' },
+  { label: 'nav.transport_companies', icon: Truck, to: '/partners/transport-companies' },
 ];
 
 const ADMIN: NavItem[] = [
@@ -83,9 +89,15 @@ export function Sidebar({ open, onClose }: SidebarProps): JSX.Element {
         </div>
         <nav className="flex-1 space-y-6 overflow-y-auto p-3 lg:pt-5">
           <NavGroup items={MAIN} onNavigate={onClose} />
+          <div data-testid="nav-partners">
+            <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              {t('nav.partners')}
+            </p>
+            <NavGroup items={PARTNERS} onNavigate={onClose} />
+          </div>
           {isSuperAdmin && (
             <div data-testid="nav-admin">
-              <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                 {t('nav.admin')}
               </p>
               <NavGroup items={ADMIN} onNavigate={onClose} />

@@ -1,4 +1,12 @@
-import { Building2, Coins, ListOrdered, Users, type LucideIcon } from 'lucide-react';
+import {
+  Building2,
+  Coins,
+  Handshake,
+  ListOrdered,
+  Truck,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
@@ -6,7 +14,7 @@ import { cn } from '@/lib/cn';
 import { useDigitLocale } from '@/lib/digits';
 import { useList } from '@/lib/hooks';
 import { useTodayUsdRate } from '@/lib/rates';
-import type { Branch, StatementLine, User } from '@/types/api';
+import type { Branch, StatementLine, Trader, TransportCompany, User } from '@/types/api';
 
 import { TodayRateBanner } from './TodayRateBanner';
 
@@ -59,6 +67,11 @@ export function AdminOverview(): JSX.Element {
   const users = useList<User>(['users'], '/users/');
   const lines = useList<StatementLine>(['statement-lines'], '/statement-lines/');
   const today = useTodayUsdRate();
+  // Same query keys as the partner pages, so creating a trader refreshes the tile.
+  const traders = useList<Trader>(['traders'], '/traders/', { is_active: true });
+  const companies = useList<TransportCompany>(['transport_companies'], '/transport-companies/', {
+    is_active: true,
+  });
 
   const count = (rows: unknown[] | undefined): string | null => (rows ? d(rows.length) : null);
 
@@ -70,7 +83,7 @@ export function AdminOverview(): JSX.Element {
         </h2>
         <TodayRateBanner to="/admin/exchange-rates" />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Tile
           to="/admin/branches"
           icon={Building2}
@@ -101,6 +114,20 @@ export function AdminOverview(): JSX.Element {
           label={t('dashboard.tile_lines')}
           value={lines.data ? d(lines.data.filter((l) => l.is_active).length) : null}
           testId="tile-lines"
+        />
+        <Tile
+          to="/partners/traders?is_active=true"
+          icon={Handshake}
+          label={t('dashboard.tile_traders')}
+          value={count(traders.data)}
+          testId="tile-traders"
+        />
+        <Tile
+          to="/partners/transport-companies?is_active=true"
+          icon={Truck}
+          label={t('dashboard.tile_companies')}
+          value={count(companies.data)}
+          testId="tile-companies"
         />
       </div>
     </section>

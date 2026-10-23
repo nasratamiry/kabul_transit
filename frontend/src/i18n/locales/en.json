@@ -18,7 +18,9 @@
     "coming_soon": "Soon",
     "menu": "Menu",
     "close_menu": "Close menu",
-    "exchange_rates": "Exchange rates"
+    "exchange_rates": "Exchange rates",
+    "traders": "Traders",
+    "transport_companies": "Transport companies"
   },
   "auth": {
     "login": "Sign in",
@@ -97,7 +99,9 @@
     "tile_rate": "Today’s rate",
     "tile_lines": "Active statement lines",
     "rate_set": "Entered",
-    "rate_missing": "Missing"
+    "rate_missing": "Missing",
+    "tile_traders": "Active traders",
+    "tile_companies": "Active transport companies"
   },
   "errors": {
     "network": "Could not reach the server. Check the connection.",
@@ -268,5 +272,67 @@
       "OTHER": "Other"
     },
     "sort_invalid": "A whole number, 0 or more"
+  },
+  "partners": {
+    "active_only": "Active only",
+    "inactive_only": "Inactive only",
+    "all": "All",
+    "created_at": "Created",
+    "deactivate": "Deactivate",
+    "activate": "Activate",
+    "phone_invalid": "Phone: digits only (with + - or spaces).",
+    "too_long": "Too long."
+  },
+  "traders": {
+    "title": "Traders",
+    "description": "Traders and customers who pay for the trucks. Every branch sees the same list.",
+    "singular": "Trader",
+    "plural": "Traders",
+    "name": "Trader / customer name",
+    "company_name": "Company",
+    "phone": "Phone",
+    "national_id": "Tazkira / ID number",
+    "address": "Address",
+    "note": "Notes",
+    "add_button": "Add trader",
+    "edit_title": "Edit trader",
+    "search_placeholder": "Search name, company, phone or ID…",
+    "created": "Trader “{{name}}” added",
+    "updated": "Trader “{{name}}” saved",
+    "deleted": "Trader “{{name}}” deleted",
+    "delete_confirm_title": "Delete trader “{{name}}”?",
+    "delete_confirm": "A trader with transactions cannot be deleted; deactivate them instead.",
+    "deactivate_confirm_title": "Deactivate trader “{{name}}”?",
+    "deactivate_confirm": "Inactive traders are hidden in new transaction forms. Their past transactions are untouched.",
+    "activate_confirm_title": "Reactivate trader “{{name}}”?",
+    "activate_confirm": "The trader shows up in new forms again.",
+    "activated": "Trader “{{name}}” activated",
+    "deactivated": "Trader “{{name}}” deactivated",
+    "no_results": "No traders found"
+  },
+  "transport_companies": {
+    "title": "Transport companies",
+    "description": "Companies whose trucks carry the cargo. Every branch sees the same list.",
+    "singular": "Transport company",
+    "plural": "Transport companies",
+    "name": "Company name",
+    "phone": "Phone",
+    "country": "Country",
+    "note": "Notes",
+    "add_button": "Add transport company",
+    "edit_title": "Edit transport company",
+    "search_placeholder": "Search name, phone or country…",
+    "created": "Company “{{name}}” added",
+    "updated": "Company “{{name}}” saved",
+    "deleted": "Company “{{name}}” deleted",
+    "delete_confirm_title": "Delete company “{{name}}”?",
+    "delete_confirm": "A company with transactions cannot be deleted; deactivate it instead.",
+    "deactivate_confirm_title": "Deactivate company “{{name}}”?",
+    "deactivate_confirm": "Inactive companies are hidden in new transaction forms. Past transactions are untouched.",
+    "activate_confirm_title": "Reactivate company “{{name}}”?",
+    "activate_confirm": "The company shows up in new forms again.",
+    "activated": "Company “{{name}}” activated",
+    "deactivated": "Company “{{name}}” deactivated",
+    "no_results": "No companies found"
   }
 }

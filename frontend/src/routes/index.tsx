@@ -7,6 +7,8 @@ import { StatementLines } from '@/pages/admin/StatementLines';
 import { Users } from '@/pages/admin/Users';
 import { Dashboard } from '@/pages/Dashboard';
 import { Login } from '@/pages/Login';
+import { Traders } from '@/pages/partners/Traders';
+import { TransportCompanies } from '@/pages/partners/TransportCompanies';
 import { NotFound } from '@/pages/NotFound';
 
 import { HomeRedirect } from './HomeRedirect';
@@ -41,6 +43,31 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <HomeRedirect /> },
       { path: 'dashboard', element: <Dashboard />, handle: crumb('nav.dashboard') },
+      {
+        // Company-wide partners: both roles (no RequireRole).
+        path: 'partners',
+        handle: crumb('nav.partners', false),
+        children: [
+          {
+            path: 'traders',
+            element: <Traders />,
+            handle: crumb('nav.traders'),
+            children: [
+              { path: 'new', handle: crumb('common.add') },
+              { path: ':id/edit', handle: crumb('common.edit') },
+            ],
+          },
+          {
+            path: 'transport-companies',
+            element: <TransportCompanies />,
+            handle: crumb('nav.transport_companies'),
+            children: [
+              { path: 'new', handle: crumb('common.add') },
+              { path: ':id/edit', handle: crumb('common.edit') },
+            ],
+          },
+        ],
+      },
       {
         path: 'admin',
         element: (

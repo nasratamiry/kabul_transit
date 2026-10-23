@@ -1,4 +1,4 @@
-import { Inbox } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Inbox } from 'lucide-react';
 import type { KeyboardEvent, ReactNode } from 'react';
 
 import { cn } from '@/lib/cn';
@@ -10,6 +10,13 @@ export interface Column<T> {
   /** Logical alignment: 'start' / 'end' follow the reading direction. Default 'start'. */
   align?: 'start' | 'center' | 'end';
   className?: string;
+  /** The header becomes a sort button (the table only reports clicks; the page sorts). */
+  sortable?: boolean;
+}
+
+export interface SortState {
+  key: string;
+  dir: 'asc' | 'desc';
 }
 
 export interface DataTableProps<T> {
@@ -23,6 +30,9 @@ export interface DataTableProps<T> {
   rowClassName?: (row: T) => string | false | undefined;
   caption?: string;
   className?: string;
+  sort?: SortState;
+  /** Called with the column key; the caller decides the new direction. */
+  onSort?: (key: string) => void;
 }
 
 const ALIGN = { start: 'text-start', center: 'text-center', end: 'text-end' };
@@ -44,6 +54,8 @@ export function DataTable<T>({
   rowClassName,
   caption,
   className,
+  sort,
+  onSort,
 }: DataTableProps<T>): JSX.Element {
   const showSkeleton = isLoading && !rows?.length;
 
@@ -66,20 +78,48 @@ export function DataTable<T>({
         {caption && <caption className="sr-only">{caption}</caption>}
         <thead className="sticky top-0 z-[2] bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-900 dark:text-gray-400">
           <tr>
-            {columns.map((col, i) => (
-              <th
-                key={col.key}
-                scope="col"
-                className={cn(
-                  'whitespace-nowrap border-b border-gray-200 px-4 py-3 dark:border-gray-700',
-                  ALIGN[col.align ?? 'start'],
-                  i === 0 && STICKY,
-                  col.className,
-                )}
-              >
-                {col.header}
-              </th>
-            ))}
+            {columns.map((col, i) => {
+              const active = sort?.key === col.key;
+              const SortIcon = !active ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown;
+              return (
+                <th
+                  key={col.key}
+                  scope="col"
+                  aria-sort={
+                    col.sortable
+                      ? active
+                        ? sort.dir === 'asc'
+                          ? 'ascending'
+                          : 'descending'
+                        : 'none'
+                      : undefined
+                  }
+                  className={cn(
+                    'whitespace-nowrap border-b border-gray-200 px-4 py-3 dark:border-gray-700',
+                    ALIGN[col.align ?? 'start'],
+                    i === 0 && STICKY,
+                    col.className,
+                  )}
+                >
+                  {col.sortable && onSort ? (
+                    <button
+                      type="button"
+                      onClick={() => onSort(col.key)}
+                      data-testid={`sort-${col.key}`}
+                      className="inline-flex items-center gap-1 rounded uppercase tracking-wide hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:hover:text-gray-100"
+                    >
+                      {col.header}
+                      <SortIcon
+                        className={cn('h-3.5 w-3.5', !active && 'opacity-40')}
+                        aria-hidden
+                      />
+                    </button>
+                  ) : (
+                    col.header
+                  )}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody aria-busy={isLoading || undefined}>

@@ -18,7 +18,9 @@
     "coming_soon": "به‌زودی",
     "menu": "منو",
     "close_menu": "بستن منو",
-    "exchange_rates": "نرخ اسعار"
+    "exchange_rates": "نرخ اسعار",
+    "traders": "تاجران",
+    "transport_companies": "شرکت‌های ترانسپورت"
   },
   "auth": {
     "login": "ورود",
@@ -97,7 +99,9 @@
     "tile_rate": "نرخ امروز",
     "tile_lines": "سطرهای فعال گزارش",
     "rate_set": "ثبت شده",
-    "rate_missing": "ثبت نشده"
+    "rate_missing": "ثبت نشده",
+    "tile_traders": "تاجران فعال",
+    "tile_companies": "شرکت‌های ترانسپورت فعال"
   },
   "errors": {
     "network": "اتصال به سرور برقرار نشد. انترنت یا سرور را بررسی کنید.",
@@ -268,5 +272,67 @@
       "OTHER": "سایر"
     },
     "sort_invalid": "یک عدد صحیح ۰ یا بیشتر"
+  },
+  "partners": {
+    "active_only": "فقط فعال",
+    "inactive_only": "فقط غیرفعال",
+    "all": "همه",
+    "created_at": "تاریخ ثبت",
+    "deactivate": "غیرفعال کردن",
+    "activate": "فعال کردن",
+    "phone_invalid": "تماس فقط رقم باشد (با + یا - یا فاصله).",
+    "too_long": "متن از حد مجاز طولانی‌تر است."
+  },
+  "traders": {
+    "title": "تاجران",
+    "description": "تاجران و مشتریانی که برای موترها پول می‌پردازند. همهٔ بندرها همین فهرست را می‌بینند.",
+    "singular": "تاجر",
+    "plural": "تاجران",
+    "name": "نام تاجر / مشتری",
+    "company_name": "نام شرکت",
+    "phone": "نمبر تماس",
+    "national_id": "شماره تذکره / هویت",
+    "address": "آدرس",
+    "note": "ملاحظات",
+    "add_button": "افزودن تاجر",
+    "edit_title": "ویرایش تاجر",
+    "search_placeholder": "جستجو در نام، شرکت، تماس یا تذکره…",
+    "created": "تاجر «{{name}}» اضافه شد",
+    "updated": "تاجر «{{name}}» ذخیره شد",
+    "deleted": "تاجر «{{name}}» حذف شد",
+    "delete_confirm_title": "تاجر «{{name}}» حذف شود؟",
+    "delete_confirm": "اگر این تاجر معامله داشته باشد، حذف نمی‌شود؛ به جای آن غیرفعالش کنید.",
+    "deactivate_confirm_title": "تاجر «{{name}}» غیرفعال شود؟",
+    "deactivate_confirm": "تاجر غیرفعال در فورم‌های معاملهٔ تازه نشان داده نمی‌شود. معاملات قبلی‌اش دست نمی‌خورد.",
+    "activate_confirm_title": "تاجر «{{name}}» دوباره فعال شود؟",
+    "activate_confirm": "تاجر دوباره در فورم‌های تازه نشان داده می‌شود.",
+    "activated": "تاجر «{{name}}» فعال شد",
+    "deactivated": "تاجر «{{name}}» غیرفعال شد",
+    "no_results": "هیچ تاجری پیدا نشد"
+  },
+  "transport_companies": {
+    "title": "شرکت‌های ترانسپورت",
+    "description": "شرکت‌هایی که موترهایشان بار را می‌برند. همهٔ بندرها همین فهرست را می‌بینند.",
+    "singular": "شرکت ترانسپورت",
+    "plural": "شرکت‌های ترانسپورت",
+    "name": "نام شرکت",
+    "phone": "نمبر تماس",
+    "country": "کشور",
+    "note": "ملاحظات",
+    "add_button": "افزودن شرکت ترانسپورت",
+    "edit_title": "ویرایش شرکت ترانسپورت",
+    "search_placeholder": "جستجو در نام، تماس یا کشور…",
+    "created": "شرکت «{{name}}» اضافه شد",
+    "updated": "شرکت «{{name}}» ذخیره شد",
+    "deleted": "شرکت «{{name}}» حذف شد",
+    "delete_confirm_title": "شرکت «{{name}}» حذف شود؟",
+    "delete_confirm": "اگر این شرکت معامله داشته باشد، حذف نمی‌شود؛ به جای آن غیرفعالش کنید.",
+    "deactivate_confirm_title": "شرکت «{{name}}» غیرفعال شود؟",
+    "deactivate_confirm": "شرکت غیرفعال در فورم‌های معاملهٔ تازه نشان داده نمی‌شود. معاملات قبلی‌اش دست نمی‌خورد.",
+    "activate_confirm_title": "شرکت «{{name}}» دوباره فعال شود؟",
+    "activate_confirm": "شرکت دوباره در فورم‌های تازه نشان داده می‌شود.",
+    "activated": "شرکت «{{name}}» فعال شد",
+    "deactivated": "شرکت «{{name}}» غیرفعال شد",
+    "no_results": "هیچ شرکتی پیدا نشد"
   }
 }

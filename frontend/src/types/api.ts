@@ -55,6 +55,30 @@ export interface User {
   is_locked: boolean;
 }
 
+/** TraderSerializer (fields='__all__'). Company-wide, not port-scoped. Name is not unique. */
+export interface Trader {
+  id: number;
+  name: string;
+  phone: string;
+  company_name: string;
+  national_id: string;
+  address: string;
+  note: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+/** TransportCompanySerializer (fields='__all__'). Company-wide; name is unique. */
+export interface TransportCompany {
+  id: number;
+  name: string;
+  phone: string;
+  country: string;
+  note: string;
+  is_active: boolean;
+  created_at: string;
+}
+
 /** Currencies that have a daily rate (AFN is always 1 and never stored). */
 export type Currency = 'USD' | 'PKR' | 'EUR' | 'IRR';
 

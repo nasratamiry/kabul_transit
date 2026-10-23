@@ -18,7 +18,9 @@
     "coming_soon": "ژر",
     "menu": "مینو",
     "close_menu": "مینو بندول",
-    "exchange_rates": "د اسعارو نرخ"
+    "exchange_rates": "د اسعارو نرخ",
+    "traders": "سوداګر",
+    "transport_companies": "د ترانسپورت شرکتونه"
   },
   "auth": {
     "login": "ننوتل",
@@ -97,7 +99,9 @@
     "tile_rate": "د نن نرخ",
     "tile_lines": "د راپور فعالې کرښې",
     "rate_set": "ثبت شوی",
-    "rate_missing": "نه دی ثبت شوی"
+    "rate_missing": "نه دی ثبت شوی",
+    "tile_traders": "فعال سوداګر",
+    "tile_companies": "فعال د ترانسپورت شرکتونه"
   },
   "errors": {
     "network": "له سرور سره اړیکه ونه شوه. انټرنېټ یا سرور وګورئ.",
@@ -268,5 +272,67 @@
       "OTHER": "نور"
     },
     "sort_invalid": "یو بشپړ عدد، ۰ یا ډېر"
+  },
+  "partners": {
+    "active_only": "یوازې فعال",
+    "inactive_only": "یوازې غیرفعال",
+    "all": "ټول",
+    "created_at": "د ثبت نېټه",
+    "deactivate": "غیرفعالول",
+    "activate": "فعالول",
+    "phone_invalid": "اړیکه یوازې شمېرې وي (له + یا - یا تشې سره).",
+    "too_long": "متن له اجازې اوږد دی."
+  },
+  "traders": {
+    "title": "سوداګر",
+    "description": "هغه سوداګر او پیرودونکي چې د موټرو پیسې ورکوي. ټول بندرونه همدا لېست ګوري.",
+    "singular": "سوداګر",
+    "plural": "سوداګر",
+    "name": "د سوداګر / پیرودونکي نوم",
+    "company_name": "د شرکت نوم",
+    "phone": "د اړیکې شمېره",
+    "national_id": "د تذکرې / هویت شمېره",
+    "address": "پته",
+    "note": "یادښت",
+    "add_button": "سوداګر زیاتول",
+    "edit_title": "د سوداګر سمول",
+    "search_placeholder": "په نوم، شرکت، اړیکه یا تذکره کې لټون…",
+    "created": "سوداګر «{{name}}» زیات شو",
+    "updated": "سوداګر «{{name}}» وساتل شو",
+    "deleted": "سوداګر «{{name}}» ړنګ شو",
+    "delete_confirm_title": "سوداګر «{{name}}» ړنګ شي؟",
+    "delete_confirm": "که دا سوداګر معامله ولري، نه ړنګېږي؛ پر ځای یې غیرفعال کړئ.",
+    "deactivate_confirm_title": "سوداګر «{{name}}» غیرفعال شي؟",
+    "deactivate_confirm": "غیرفعال سوداګر د نوې معاملې په فورمو کې نه ښکاري. پخوانۍ معاملې یې نه بدلېږي.",
+    "activate_confirm_title": "سوداګر «{{name}}» بیا فعال شي؟",
+    "activate_confirm": "سوداګر بیا په نویو فورمو کې ښکاري.",
+    "activated": "سوداګر «{{name}}» فعال شو",
+    "deactivated": "سوداګر «{{name}}» غیرفعال شو",
+    "no_results": "هېڅ سوداګر ونه موندل شو"
+  },
+  "transport_companies": {
+    "title": "د ترانسپورت شرکتونه",
+    "description": "هغه شرکتونه چې موټرونه یې بار وړي. ټول بندرونه همدا لېست ګوري.",
+    "singular": "د ترانسپورت شرکت",
+    "plural": "د ترانسپورت شرکتونه",
+    "name": "د شرکت نوم",
+    "phone": "د اړیکې شمېره",
+    "country": "هېواد",
+    "note": "یادښت",
+    "add_button": "د ترانسپورت شرکت زیاتول",
+    "edit_title": "د ترانسپورت شرکت سمول",
+    "search_placeholder": "په نوم، اړیکه یا هېواد کې لټون…",
+    "created": "شرکت «{{name}}» زیات شو",
+    "updated": "شرکت «{{name}}» وساتل شو",
+    "deleted": "شرکت «{{name}}» ړنګ شو",
+    "delete_confirm_title": "شرکت «{{name}}» ړنګ شي؟",
+    "delete_confirm": "که دا شرکت معامله ولري، نه ړنګېږي؛ پر ځای یې غیرفعال کړئ.",
+    "deactivate_confirm_title": "شرکت «{{name}}» غیرفعال شي؟",
+    "deactivate_confirm": "غیرفعال شرکت د نوې معاملې په فورمو کې نه ښکاري. پخوانۍ معاملې یې نه بدلېږي.",
+    "activate_confirm_title": "شرکت «{{name}}» بیا فعال شي؟",
+    "activate_confirm": "شرکت بیا په نویو فورمو کې ښکاري.",
+    "activated": "شرکت «{{name}}» فعال شو",
+    "deactivated": "شرکت «{{name}}» غیرفعال شو",
+    "no_results": "هېڅ شرکت ونه موندل شو"
   }
 }

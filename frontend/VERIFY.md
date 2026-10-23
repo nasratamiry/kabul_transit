@@ -122,3 +122,40 @@ admin's own StatementLine history rows).
 
 Accessibility: Lighthouse (accessibility category, desktop) on each admin page and the
 dashboard should score ≥ 90.
+
+---
+
+# Stage 11 — partners (traders, transport companies)
+
+```powershell
+cd "D:\Kabul Cargo TN\frontend"
+..\.venv\Scripts\python scripts\cleanup-stage11.py --setup   # e2e_admin, e2e_mgr, e2e_mgr_b + 2 branches
+node scripts/verify-stage11.mjs ..\stage11_screenshots
+..\.venv\Scripts\python scripts\cleanup-stage11.py           # removes everything the run made
+```
+
+| #   | Check                                                                   |
+| --- | ----------------------------------------------------------------------- |
+| 1   | `/partners/traders` renders with Dari headers                           |
+| 2   | Create «تاجر آزمایشی ۱» → in list + toast                               |
+| 3   | Edit name → persists                                                    |
+| 4   | Search by part of the name                                              |
+| 5   | «فقط فعال» / «فقط غیرفعال» filter (kept in the URL)                     |
+| 6   | Deactivate → row greyed, badge غیرفعال                                  |
+| 7   | Same trader name twice → allowed (no unique constraint on Trader.name)  |
+| 8   | Phone «۰۷۰۱۲۳۴۵۶۷» → stored 0701234567                                  |
+| 9   | Delete a trader without transactions                                    |
+| 10  | Delete a trader with a transaction → 409 Dari toast, row stays          |
+| S   | Sort by «تاریخ ثبت» header (asc / desc, aria-sort)                      |
+| 12  | Transport companies: create, edit, duplicate name → Dari 400, delete    |
+| 13  | branch_manager: «شرکا» in sidebar, both pages open, no «مدیریت»         |
+| 14  | branch_manager creates a trader → super_admin and another branch see it |
+| 15  | branch_manager edits a trader the super_admin created                   |
+| 16  | branch_manager on `/admin/users` → 403 page                             |
+| 17  | Dashboard tiles: active traders / transport companies match the API     |
+| 18  | No uncaught page errors (both roles)                                    |
+| 19  | `/partners/traders?is_active=true` deep link applies the filter         |
+| 20  | Mobile: table scrolls sideways, first column sticky                     |
+
+Check 11 (history modal) is not part of this stage: the API has no history endpoint for
+partners. Lighthouse accessibility on both partner pages should be ≥ 95.
