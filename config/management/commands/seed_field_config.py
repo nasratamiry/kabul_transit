@@ -69,6 +69,22 @@ TRADE_OVERRIDES = {
 }
 
 
+def default_field_configs():
+    """
+    Yield (trade_type, field_name, defaults) for every trade type × FIELD_SPEC row,
+    with the trade-type overrides applied. Shared by this command and the
+    auto-seed signal (config/signals.py) so both always produce the same rows.
+    """
+    for trade_type, _ in Transaction.TradeType.choices:
+        overrides = TRADE_OVERRIDES.get(trade_type, {})
+        for field_name, label_fa, sort_order, visibility in FIELD_SPEC:
+            yield trade_type, field_name, {
+                'field_label_fa': label_fa,
+                'visibility': overrides.get(field_name, visibility),
+                'sort_order': sort_order,
+            }
+
+
 class Command(BaseCommand):
     help = 'Seed FieldConfig rows for every Branch × every TradeType × every Transaction field.'
 
@@ -85,22 +101,17 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING('هیچ بندری یافت نشد. اول حداقل یک بندر بسازید.'))
             return
 
-        trade_types = [c[0] for c in Transaction.TradeType.choices]
         created = skipped = 0
 
         for branch in branches:
-            for trade_type in trade_types:
-                for field_name, label_fa, sort_order, visibility in FIELD_SPEC:
-                    final_visibility = TRADE_OVERRIDES.get(trade_type, {}).get(field_name, visibility)
-                    _, was_created = FieldConfig.objects.get_or_create(
-                        branch=branch, trade_type=trade_type, field_name=field_name,
-                        defaults={'field_label_fa': label_fa, 'visibility': final_visibility,
-                                  'sort_order': sort_order},
-                    )
-                    if was_created:
-                        created += 1
-                    else:
-                        skipped += 1
+            for trade_type, field_name, defaults in default_field_configs():
+                _, was_created = FieldConfig.objects.get_or_create(
+                    branch=branch, trade_type=trade_type, field_name=field_name, defaults=defaults,
+                )
+                if was_created:
+                    created += 1
+                else:
+                    skipped += 1
 
         self.stdout.write(self.style.SUCCESS(
             f'ردیف‌های ساخته‌شده: {created} | ردیف‌های بدون تغییر: {skipped}'))

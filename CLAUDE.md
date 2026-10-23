@@ -146,5 +146,7 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
   - [ ] باقی‌مانده: `Transaction.fee_per_dollar_afn` برای ارزهای غیر دالر از
     ExchangeRate خوانده شود (فعلاً None است)
 - [x] مرحلهٔ ۵: FieldConfig با sort_order و seed command
-  - بعد از ساختن هر بندر جدید: `python manage.py seed_field_config`
+  - بندر جدید خودکار ۱۷۲ ردیف FieldConfig می‌گیرد (signal در `config/signals.py`).
+    دستور `seed_field_config` فقط برای بندرهای قدیمی یا بعد از اضافه شدن فیلد
+    تازه به FIELD_SPEC لازم است.
 - [ ] فاز دوم: Transaction، FieldConfig، نرخ، فرانت (بعد از رسیدن اکسل جدید)

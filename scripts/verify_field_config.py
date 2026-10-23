@@ -74,11 +74,14 @@ try:
               sorted(spec_names) == sorted(model_names) and len(spec_names) == len(set(spec_names)),
               f'spec={len(spec_names)}, model={len(model_names)}, '
               f'missing={sorted(set(model_names) - set(spec_names))}, extra={sorted(set(spec_names) - set(model_names))}')
+        auto_rows = FieldConfig.objects.filter(branch=branch).count()
+        FieldConfig.objects.filter(branch=branch).delete()  # like a branch from before the auto-seed signal
         created = seed(branch='zzcfg')
         per_type = {t: FieldConfig.objects.filter(branch=branch, trade_type=t).count() for t in TRADE_TYPES}
         check(f'{len(FIELD_SPEC)} rows for each of the 4 trade types',
               created == len(FIELD_SPEC) * 4 and set(per_type.values()) == {len(FIELD_SPEC)},
               f'created={created}, per type={per_type}')
+        check('command backfills the same rows the signal makes', auto_rows == created, f'signal={auto_rows}')
 
         print('۲. ترتیب فیلدها')
         export_order = list(FieldConfig.objects.filter(branch=branch, trade_type='EXPORT')
@@ -140,8 +143,8 @@ try:
         created = seed()
         rows_after = {b.pk: b.field_configs.count() for b in Branch.objects.all()}
         others_unchanged = all(rows_after[pk] == count for pk, count in rows_before.items())
-        check('only the new branch got rows',
-              created == len(FIELD_SPEC) * 4 and rows_after[new_branch.pk] == created and others_unchanged,
+        check('new branch has its rows; manual seed adds nothing; other branches unchanged',
+              created == 0 and rows_after[new_branch.pk] == len(FIELD_SPEC) * 4 and others_unchanged,
               f'created={created}, new branch rows={rows_after[new_branch.pk]}')
 
         print('۸. صفحات پنل مدیریت')
@@ -179,11 +182,36 @@ try:
         check('row has 2 history entries (create + edit)', row.history.count() == 2, str(row.history.count()))
         check('admin user recorded on the edit', row.history.first().history_user == admin_user)
 
+        print('۱۲. ساختن بندر خودکار seed می‌کند')
+        auto_branch = Branch.objects.create(name='بندر خودکار', code='ZZAUTO')
+        auto_rows = FieldConfig.objects.filter(branch=auto_branch).count()
+        check('بندر جدید خودکار 172 ردیف گرفت', auto_rows == len(FIELD_SPEC) * 4,
+              f'{auto_rows} rows')
+        # verify trade-type override applied automatically
+        auto_motabari_transit = FieldConfig.objects.get(
+            branch=auto_branch, trade_type='TRANSIT', field_name='motabari').visibility
+        check('override تجاری خودکار اعمال شد (TRANSIT + motabari = REQUIRED)',
+              auto_motabari_transit == 'REQUIRED', auto_motabari_transit)
+        check('auto rows have history too', FieldConfig.history.filter(branch=auto_branch).count() == auto_rows)
+
+        response = client.post('/admin/accounts/branch/add/', {'name': 'بندر از پنل', 'code': 'ZZADM',
+                                                               'is_active': 'on'})
+        admin_branch = Branch.objects.filter(code='ZZADM').first()
+        admin_history = FieldConfig.history.filter(branch=admin_branch)
+        check('branch added in admin → 172 rows, history credited to the admin user',
+              response.status_code == 302 and admin_branch is not None
+              and admin_branch.field_configs.count() == len(FIELD_SPEC) * 4
+              and admin_history.count() == len(FIELD_SPEC) * 4
+              and not admin_history.exclude(history_user=admin_user).exists(),
+              f'status={response.status_code}')
+        check('editing a branch does not seed again',
+              (auto_branch.save() or True) and FieldConfig.objects.filter(branch=auto_branch).count() == auto_rows)
+
         raise Rollback
 except Rollback:
     pass
 
-print('۱۱. پاکسازی')
+print('۱۱. پاکسازی (آخر کار)')
 after = counts()
 check('no leftover rows', before == after, f'before={before}, after={after}')
 
