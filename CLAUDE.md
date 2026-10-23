@@ -145,4 +145,6 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
   - قفل نرم فعلاً فقط در پنل ادمین (ریدایرکت به فورم نرخ)؛ API (HTTP 428) در مرحلهٔ ۶
   - [ ] باقی‌مانده: `Transaction.fee_per_dollar_afn` برای ارزهای غیر دالر از
     ExchangeRate خوانده شود (فعلاً None است)
+- [x] مرحلهٔ ۵: FieldConfig با sort_order و seed command
+  - بعد از ساختن هر بندر جدید: `python manage.py seed_field_config`
 - [ ] فاز دوم: Transaction، FieldConfig، نرخ، فرانت (بعد از رسیدن اکسل جدید)

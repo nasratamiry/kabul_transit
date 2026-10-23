@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'partners',
     'operations',
     'finance',
+    'config',
 ]
 
 # NOTE: LocaleMiddleware is intentionally absent so the admin stays Dari
