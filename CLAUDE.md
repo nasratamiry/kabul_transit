@@ -149,4 +149,8 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
   - بندر جدید خودکار ۱۷۲ ردیف FieldConfig می‌گیرد (signal در `config/signals.py`).
     دستور `seed_field_config` فقط برای بندرهای قدیمی یا بعد از اضافه شدن فیلد
     تازه به FIELD_SPEC لازم است.
+- [x] مرحلهٔ ۶: API کامل + JWT + دسترسی + قفل نرم روی API
+  - همهٔ endpoint ها زیر `/api/` (ورود: `/api/auth/login/`). وقتی DEBUG روشن
+    است، باز کردن `/api/` در مرورگر صفحهٔ browsable API از DRF را نشان می‌دهد.
+  - آزمایش کامل: `.venv\Scripts\python scripts\verify_api.py` (۳۱ تست، rollback)
 - [ ] فاز دوم: Transaction، FieldConfig، نرخ، فرانت (بعد از رسیدن اکسل جدید)

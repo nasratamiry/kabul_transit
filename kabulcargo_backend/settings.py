@@ -31,6 +31,8 @@ INSTALLED_APPS = [
 
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
+    'django_filters',
     'simple_history',
     'corsheaders',
     'django_jalali',
@@ -40,6 +42,7 @@ INSTALLED_APPS = [
     'operations',
     'finance',
     'config',
+    'api',
 ]
 
 # NOTE: LocaleMiddleware is intentionally absent so the admin stays Dari
@@ -143,7 +146,9 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
     'COERCE_DECIMAL_TO_STRING': True,
+    'EXCEPTION_HANDLER': 'api.exceptions.kabul_exception_handler',
 }
 
 SIMPLE_JWT = {
