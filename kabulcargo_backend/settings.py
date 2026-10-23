@@ -36,7 +36,10 @@ INSTALLED_APPS = [
     'simple_history',
     'corsheaders',
     'django_jalali',
+    'axes',
+    'csp',
 
+    'kabulcargo_backend',  # project-wide management commands (backup_db, rotate_secret_key)
     'accounts',
     'partners',
     'operations',
@@ -49,6 +52,7 @@ INSTALLED_APPS = [
 # regardless of the visitor's browser language.
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'kabulcargo_backend.security.KabulCSPMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -57,6 +61,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'simple_history.middleware.HistoryRequestMiddleware',
+    'axes.middleware.AxesMiddleware',  # must stay last
 ]
 
 ROOT_URLCONF = 'kabulcargo_backend.urls'
@@ -100,6 +105,12 @@ DATABASES = {
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.User'
+
+# Axes must come first so locked-out accounts are refused before the password is checked.
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesStandaloneBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +160,17 @@ REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
     'COERCE_DECIMAL_TO_STRING': True,
     'EXCEPTION_HANDLER': 'api.exceptions.kabul_exception_handler',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.AnonRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': '100/minute',
+        'anon': '20/minute',
+    },
+    # DRF trusts X-Forwarded-For by default (NUM_PROXIES=None), which lets anyone
+    # dodge the anon throttle by faking the header. Same rule as client_ip().
+    'NUM_PROXIES': config('TRUSTED_PROXY_COUNT', default=0, cast=int),
 }
 
 SIMPLE_JWT = {
@@ -187,7 +209,9 @@ JAZZMIN_SETTINGS = {
     },
     'default_icon_parents': 'fas fa-folder',
     'default_icon_children': 'fas fa-circle',
-    'related_modal_active': True,
+    # Related-object modals load admin pages in an iframe, which X-Frame-Options
+    # DENY (below) blocks; plain popup windows are used instead.
+    'related_modal_active': False,
     # Jazzmin only accepts Bootstrap class names below; the exact brand hex
     # values from branding.py are applied on top by this stylesheet.
     'custom_css': 'admin_custom/kabulcargo.css',
@@ -210,5 +234,116 @@ JAZZMIN_UI_TWEAKS = {
         'warning': 'btn-warning',
         'danger': 'btn-danger',
         'success': 'btn-success',
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Security
+# ---------------------------------------------------------------------------
+# Reverse proxies in front of Django (nginx = 1). Only then is X-Forwarded-For
+# trusted, and only the hop our proxy added — see security.client_ip().
+TRUSTED_PROXY_COUNT = config('TRUSTED_PROXY_COUNT', default=0, cast=int)
+
+# Production only (settings_production.py sets these unconditionally).
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000  # one year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    CSRF_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    CSRF_COOKIE_SAMESITE = 'Lax'
+
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+SECURE_REFERRER_POLICY = 'same-origin'
+# (SECURE_BROWSER_XSS_FILTER was removed in Django 4.0 and the X-XSS-Protection
+# header is obsolete in browsers; CSP below replaces it.)
+
+# Content Security Policy (django-csp 4 format). /admin/ gets a small, documented
+# exception in security.KabulCSPMiddleware.
+CONTENT_SECURITY_POLICY = {
+    'DIRECTIVES': {
+        'default-src': ["'self'"],
+        'script-src': ["'self'"],
+        'style-src': ["'self'", "'unsafe-inline'"],  # Jazzmin inline styles
+        'img-src': ["'self'", 'data:'],
+        'font-src': ["'self'"],
+        'connect-src': ["'self'"],
+        'frame-ancestors': ["'none'"],
+        'form-action': ["'self'"],
+        'base-uri': ["'self'"],
+        'object-src': ["'none'"],
+    },
+}
+
+# Account lockout (django-axes): 5 failures → locked for 15 minutes, per
+# username and, separately, per IP. A super admin unlocks from the admin
+# (Axes → Access attempts → delete).
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = 0.25  # hours = 15 minutes
+AXES_LOCKOUT_PARAMETERS = ['username', 'ip_address']
+AXES_RESET_ON_SUCCESS = True
+AXES_LOCKOUT_CALLABLE = 'api.views.auth.lockout_response'
+AXES_CLIENT_IP_CALLABLE = 'kabulcargo_backend.security.client_ip'
+
+# Login rate limit (django-ratelimit, failed attempts only — see api/views/auth.py).
+RATELIMIT_IP_META_KEY = 'kabulcargo_backend.security.client_ip'
+LOGIN_FAILURE_RATE = '5/m'
+
+# Throttle and rate-limit counters. One process in development; production
+# needs a shared cache (settings_production.py).
+CACHES = {
+    'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'LOCATION': 'kabulcargo'},
+}
+
+# Backups (python manage.py backup_db)
+BACKUP_DIR = BASE_DIR / 'backups'
+BACKUP_KEEP_DAYS = 30
+MYSQLDUMP_PATH = config('MYSQLDUMP_PATH', default='')
+
+
+# ---------------------------------------------------------------------------
+# Logging — security events go to logs/security.log (rotated, 5 × 10 MB)
+# ---------------------------------------------------------------------------
+LOG_DIR = BASE_DIR / 'logs'
+LOG_DIR.mkdir(exist_ok=True)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'security': {
+            'format': '{asctime} [{levelname}] {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'security_file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': LOG_DIR / 'security.log',
+            'maxBytes': 10 * 1024 * 1024,
+            'backupCount': 5,
+            'formatter': 'security',
+            'encoding': 'utf-8',
+        },
+    },
+    'loggers': {
+        'kabulcargo.security': {
+            'handlers': ['security_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        # django-axes' own messages (failures, lockouts; it masks usernames and IPs)
+        'axes': {
+            'handlers': ['security_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
     },
 }

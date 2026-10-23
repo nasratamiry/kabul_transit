@@ -8,6 +8,8 @@ from django.utils import timezone
 from django_jalali.db import models as jmodels
 from simple_history.models import HistoricalRecords
 
+from .validators import validate_file_extension, validate_file_magic, validate_file_size
+
 TWO_PLACES = Decimal('0.01')
 
 
@@ -204,7 +206,9 @@ class Document(models.Model):
 
     transaction = models.ForeignKey(Transaction, verbose_name='معامله', on_delete=models.CASCADE,
                                     related_name='documents')
-    file = models.FileField('فایل سند', upload_to='documents/%Y/%m/')
+    file = models.FileField('فایل سند', upload_to='documents/%Y/%m/',
+                            validators=[validate_file_size, validate_file_extension, validate_file_magic],
+                            help_text='PDF، JPG، PNG یا WEBP — حداکثر ۱۰ میگابایت')
     title = models.CharField('عنوان سند', max_length=120, blank=True)
     uploaded_at = models.DateTimeField('تاریخ آپلود', auto_now_add=True)
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name='آپلودکننده', on_delete=models.SET_NULL,

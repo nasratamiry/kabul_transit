@@ -153,4 +153,14 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
   - همهٔ endpoint ها زیر `/api/` (ورود: `/api/auth/login/`). وقتی DEBUG روشن
     است، باز کردن `/api/` در مرورگر صفحهٔ browsable API از DRF را نشان می‌دهد.
   - آزمایش کامل: `.venv\Scripts\python scripts\verify_api.py` (۳۱ تست، rollback)
+- [x] مرحلهٔ ۷: سخت‌سازی امنیتی (rate limit، قفل حساب، هدرها، CSP، فایل، لاگ، بک‌اپ)
+  - آزمایش: `.venv\Scripts\python scripts\verify_security.py` (۲۷ تست)
+  - IP کاربر فقط از `kabulcargo_backend.security.client_ip` (هم axes، هم ratelimit،
+    هم throttle). X-Forwarded-For فقط با `TRUSTED_PROXY_COUNT>0` اعتبار دارد.
+  - همهٔ serializerها از `KabulModelSerializer` ارث ببرند: متن آزاد با bleach پاک
+    می‌شود (TextField حداکثر ۲۰۰۰ حرف).
+  - MySQL ویندوز: یک بار `deploy\mysql_timezones_windows.sql` با root؛ بدون آن
+    `CONVERT_TZ` تهی برمی‌گرداند و فیلترهای تاریخ پنل خراب می‌شوند.
+  - production: `settings_production.py` + `createcachetable` (یا Redis).
+  - CSP پنل ادمین عمداً `'unsafe-inline'` برای script دارد (Jazzmin)؛ API سخت است.
 - [ ] فاز دوم: Transaction، FieldConfig، نرخ، فرانت (بعد از رسیدن اکسل جدید)

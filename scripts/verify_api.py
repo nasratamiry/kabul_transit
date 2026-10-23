@@ -190,7 +190,9 @@ try:
         moved = client_a.patch(f'/api/transactions/{tx_a.id}/', {'branch': branch_b.id}, format='json')
         tx_a.refresh_from_db()
         upload = client_a.post('/api/documents/', {'transaction': tx_b.id, 'title': 'hack',
-                                                   'file': SimpleUploadedFile('x.txt', b'x')}, format='multipart')
+                                                   # a valid PDF, so the branch check (403) is what refuses it
+                                                   'file': SimpleUploadedFile('x.pdf', b'%PDF-1.4\n%%EOF\n')},
+                                  format='multipart')
         check('مدیر A معامله را به B برده نمی‌تواند و به معاملهٔ B سند وصل کرده نمی‌تواند',
               moved.status_code == 200 and tx_a.branch_id == branch_a.id and upload.status_code == 403,
               f'patch={moved.status_code}, branch={tx_a.branch_id}, upload={upload.status_code}')

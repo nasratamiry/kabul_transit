@@ -5,3 +5,11 @@ __pycache__/
 /media/
 /staticfiles/
 *.sqlite3
+
+.claude/settings.local.json
+
+# runtime output (stage 7)
+logs/
+backups/
+.env.bak-*
+.env.tmp
