@@ -1,18 +1,32 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Outlet } from 'react-router-dom';
 
 import { AppShell } from '@/components/layout/AppShell';
+import { Branches } from '@/pages/admin/Branches';
+import { ExchangeRates } from '@/pages/admin/ExchangeRates';
+import { StatementLines } from '@/pages/admin/StatementLines';
+import { Users } from '@/pages/admin/Users';
 import { Dashboard } from '@/pages/Dashboard';
 import { Login } from '@/pages/Login';
 import { NotFound } from '@/pages/NotFound';
 
 import { HomeRedirect } from './HomeRedirect';
 import { RequireAuth } from './RequireAuth';
+import { RequireRole } from './RequireRole';
 
 /** Breadcrumb label (i18n key) for a route, read by <Breadcrumbs> via useMatches(). */
 export interface RouteHandle {
   crumb?: string;
+  /** false: the crumb is a group label with no page of its own (e.g. «مدیریت»). */
+  link?: false;
 }
 
+const crumb = (key: string, link?: false): RouteHandle => ({ crumb: key, link });
+
+/**
+ * Drawer and dialog states are child routes without elements: the list page stays mounted
+ * (filters and scroll survive) and reads them with useMatch(), so every drawer has a
+ * shareable URL.
+ */
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
   { path: '/not-found', element: <NotFound /> },
@@ -23,15 +37,55 @@ export const router = createBrowserRouter([
         <AppShell />
       </RequireAuth>
     ),
-    handle: { crumb: 'nav.home' } satisfies RouteHandle,
+    handle: crumb('nav.home'),
     children: [
       { index: true, element: <HomeRedirect /> },
+      { path: 'dashboard', element: <Dashboard />, handle: crumb('nav.dashboard') },
       {
-        path: 'dashboard',
-        element: <Dashboard />,
-        handle: { crumb: 'nav.dashboard' } satisfies RouteHandle,
+        path: 'admin',
+        element: (
+          <RequireRole roles={['super_admin']}>
+            <Outlet />
+          </RequireRole>
+        ),
+        handle: crumb('nav.admin', false),
+        children: [
+          {
+            path: 'branches',
+            element: <Branches />,
+            handle: crumb('nav.branches'),
+            children: [
+              { path: 'new', handle: crumb('common.add') },
+              { path: ':id/edit', handle: crumb('common.edit') },
+            ],
+          },
+          {
+            path: 'users',
+            element: <Users />,
+            handle: crumb('nav.users'),
+            children: [
+              { path: 'new', handle: crumb('common.add') },
+              { path: ':id/edit', handle: crumb('common.edit') },
+            ],
+          },
+          {
+            path: 'exchange-rates',
+            element: <ExchangeRates />,
+            handle: crumb('nav.exchange_rates'),
+            children: [{ path: 'new', handle: crumb('common.add') }],
+          },
+          {
+            path: 'statement-lines',
+            element: <StatementLines />,
+            handle: crumb('nav.statement_lines'),
+            children: [
+              { path: 'new', handle: crumb('common.add') },
+              { path: ':id/edit', handle: crumb('common.edit') },
+              { path: ':id/history', handle: crumb('statement_lines.history_button') },
+            ],
+          },
+        ],
       },
-      // Later stages: wrap super-admin pages in <RequireRole roles={['super_admin']}>.
     ],
   },
   { path: '*', element: <NotFound /> },

@@ -1,6 +1,7 @@
 import {
   ArrowLeftRight,
   Building2,
+  Coins,
   FileBarChart,
   LayoutDashboard,
   ListOrdered,
@@ -33,10 +34,11 @@ const MAIN: NavItem[] = [
 ];
 
 const ADMIN: NavItem[] = [
-  { label: 'nav.branches', icon: Building2 },
-  { label: 'nav.users', icon: Users },
+  { label: 'nav.branches', icon: Building2, to: '/admin/branches' },
+  { label: 'nav.users', icon: Users, to: '/admin/users' },
+  { label: 'nav.exchange_rates', icon: Coins, to: '/admin/exchange-rates' },
+  { label: 'nav.statement_lines', icon: ListOrdered, to: '/admin/statement-lines' },
   { label: 'nav.field_config', icon: SlidersHorizontal },
-  { label: 'nav.statement_lines', icon: ListOrdered },
 ];
 
 interface SidebarProps {

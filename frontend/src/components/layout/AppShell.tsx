@@ -32,8 +32,8 @@ function Breadcrumbs(): JSX.Element {
   const { t, i18n } = useTranslation();
   const Sep = isRtlLang(i18n.language) ? ChevronLeft : ChevronRight;
   const crumbs = useMatches()
-    .map((m) => ({ path: m.pathname, crumb: (m.handle as RouteHandle | undefined)?.crumb }))
-    .filter((c): c is { path: string; crumb: string } => Boolean(c.crumb));
+    .map((m) => ({ path: m.pathname, ...(m.handle as RouteHandle | undefined) }))
+    .filter((c): c is { path: string; crumb: string; link?: false } => Boolean(c.crumb));
 
   return (
     <nav aria-label="breadcrumb" className="mb-5 text-sm text-gray-500 dark:text-gray-400">
@@ -46,6 +46,8 @@ function Breadcrumbs(): JSX.Element {
                 <span aria-current="page" className="font-medium text-gray-800 dark:text-gray-200">
                   {t(c.crumb)}
                 </span>
+              ) : c.link === false ? (
+                <span>{t(c.crumb)}</span>
               ) : (
                 <Link to={c.path} className="hover:text-brand dark:hover:text-emerald-300">
                   {t(c.crumb)}

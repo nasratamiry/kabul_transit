@@ -40,3 +40,19 @@ function roundFraction(intPart: string, fracPart: string): { int: string; dec: s
   const s = cents.toString().padStart(3, '0');
   return { int: s.slice(0, -2).replace(/^0+(?=\d)/, ''), dec: s.slice(-2) };
 }
+
+/**
+ * Exchange rate (8-decimal string from the API) for display: grouped integer part, trailing
+ * zeros trimmed but at least 2 decimals. '70.00000000' → '۷۰٫۰۰', '0.00028571' → '۰٫۰۰۰۲۸۵۷۱'.
+ */
+export function formatRate(rate: string | number | null | undefined, lang = 'fa'): string {
+  if (rate === null || rate === undefined || rate === '') return '—';
+  const text = normalizeDigits(String(rate));
+  if (!/^\d+(\.\d+)?$/.test(text)) return '—';
+  const [intPart = '0', fracRaw = ''] = text.split('.');
+  const frac = fracRaw.replace(/0+$/, '').padEnd(2, '0');
+  const rtl = isRtlLang(lang);
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, rtl ? '٬' : ',');
+  const out = `${grouped}${rtl ? '٫' : '.'}${frac}`;
+  return rtl ? toDariDigits(out) : out;
+}

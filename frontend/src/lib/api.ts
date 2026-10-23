@@ -1,4 +1,5 @@
 import axios, {
+  isAxiosError,
   type AxiosError,
   type AxiosRequestConfig,
   type InternalAxiosRequestConfig,
@@ -56,7 +57,11 @@ function refreshAccess(sentWith: string | undefined): Promise<string> {
   return refreshing;
 }
 
-/** `detail`, else the first field error of a DRF validation body. */
+/**
+ * `detail`, else the first field error of a DRF validation body. Backend messages are
+ * full Dari sentences, so the (English) field name is not prefixed; forms show each
+ * field's error under the field itself via fieldErrors().
+ */
 export function extractErrorMessage(data: unknown): string | null {
   if (!data) return null;
   if (typeof data === 'string') return data.length < 300 && !data.startsWith('<') ? data : null;
@@ -67,10 +72,24 @@ export function extractErrorMessage(data: unknown): string | null {
     for (const [field, value] of Object.entries(body)) {
       if (field === 'code') continue;
       const msg = extractErrorMessage(value);
-      if (msg) return field === 'non_field_errors' ? msg : `${field}: ${msg}`;
+      if (msg) return msg;
     }
   }
   return null;
+}
+
+/** DRF 400 body → { field: first message }. Empty for non-validation errors. */
+export function fieldErrors(error: unknown): Record<string, string> {
+  if (!isAxiosError(error) || error.response?.status !== 400) return {};
+  const body = error.response.data as unknown;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return {};
+  const out: Record<string, string> = {};
+  for (const [field, value] of Object.entries(body as Record<string, unknown>)) {
+    if (field === 'detail' || field === 'code') continue;
+    const msg = extractErrorMessage(value);
+    if (msg) out[field] = msg;
+  }
+  return out;
 }
 
 function notify(error: AxiosError<ApiErrorBody>): void {
@@ -128,6 +147,8 @@ export interface ApiMethods {
   post<T, B = unknown>(url: string, body?: B, config?: AxiosRequestConfig): Promise<T>;
   put<T, B = unknown>(url: string, body?: B, config?: AxiosRequestConfig): Promise<T>;
   patch<T, B = unknown>(url: string, body?: B, config?: AxiosRequestConfig): Promise<T>;
+  /** DRF metadata (field types and choices) for an endpoint. */
+  options<T>(url: string, config?: AxiosRequestConfig): Promise<T>;
 }
 
 const methods: ApiMethods = {
@@ -136,6 +157,7 @@ const methods: ApiMethods = {
   post: (url, body, config) => api.post(url, body, config).then((r) => r.data),
   put: (url, body, config) => api.put(url, body, config).then((r) => r.data),
   patch: (url, body, config) => api.patch(url, body, config).then((r) => r.data),
+  options: (url, config) => api.request({ ...config, url, method: 'OPTIONS' }).then((r) => r.data),
 };
 
 /** Typed API calls that resolve to the response body. Stable across renders. */

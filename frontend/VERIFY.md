@@ -70,3 +70,55 @@ npx tsc --noEmit     # 0 errors
 ## 5. Clean up
 
 Delete the test users and test branch (admin panel, or the shell), then `axes_reset`.
+
+---
+
+# Stage 10 — super admin pages
+
+Same stack as above. Needs a super_admin and a database with **no exchange rate for today**
+(the red-banner checks).
+
+```powershell
+cd "D:\Kabul Cargo TN\frontend"
+..\.venv\Scripts\python scripts\cleanup-stage10.py e2e_admin   # leftovers of an earlier run
+$env:KC_ADMIN_USER='e2e_admin'; $env:KC_ADMIN_PASS='<pass>'
+node scripts/verify-stage10.mjs ..\stage10_screenshots
+..\.venv\Scripts\python scripts\cleanup-stage10.py e2e_admin   # remove what the run created
+```
+
+The run creates branches TESTKC / DELKC, users e2e_sa2 / e2e_mgr2 and a few rates, and
+edits two statement lines; the cleanup script removes / restores all of it (including the
+admin's own StatementLine history rows).
+
+| #   | Check                                                                             |
+| --- | --------------------------------------------------------------------------------- |
+| 1   | Create branch «تست کرگو» TESTKC → in list, toast «… ۱۷۲ فیلد خودکار آماده شد»     |
+| 2   | Edit branch name → persists                                                       |
+| 3   | Code field disabled on edit (also via the `/admin/branches/:id/edit` deep link)   |
+| 4   | Toggle is_active → list shows غیرفعال                                             |
+| 5   | Delete branch with a user → 409 Dari toast; empty branch → deleted                |
+| 6   | New branch has 172 FieldConfig rows (`/api/field-configs/?branch=`)               |
+| 7   | Create super_admin user → branch field hidden, saved with branch null             |
+| 8   | branch_manager without branch → «برای مدیر بندر، بندر لازم است»                   |
+| 9   | branch_manager with branch → created; their sidebar has no «مدیریت», /admin → 403 |
+| 10  | Edit without password keeps it; edit with password changes it                     |
+| 11  | Reset-password dialog → new password logs in                                      |
+| 12  | 5 wrong logins → «قفل» badge + unlock button → unlock → login works               |
+| 13  | Deactivate user → login 401                                                       |
+| 14  | No USD rate today → red banner + CTA; `R` opens the create drawer                 |
+| 15  | CTA → drawer pre-filled today + USD → save → banner green («۷۰٫۵۰»)               |
+| 16  | Future date → backend 400 → Dari error under the date                             |
+| 17  | AFN not in the currency list; API POST with AFN → Dari 400                        |
+| 18  | 8-decimal rate 0.00028571 stored and shown as ۰٫۰۰۰۲۸۵۷۱                          |
+| 19  | Rate typed as «۰٫۰۰۰۲۸» → 0.00028 on blur → stored 0.00028000                     |
+| 20  | Shamsi date-range filter (typed in Dari digits)                                   |
+| 21  | Delete rate → confirm → removed                                                   |
+| 22  | Statement lines grouped in 4 sections, 17 default lines                           |
+| 23  | Inline edit of label_fa saves on blur                                             |
+| 24  | Section REVENUE with another source → Dari error (form) and 400 (API)             |
+| 25  | is_active off → row greyed, income statement warns about the source               |
+| 26  | History modal shows the inline edit with user and Shamsi + Gregorian date         |
+| 32  | Dashboard: super_admin sees rate card + 4 tiles; branch_manager sees none         |
+
+Accessibility: Lighthouse (accessibility category, desktop) on each admin page and the
+dashboard should score ≥ 90.

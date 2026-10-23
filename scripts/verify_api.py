@@ -22,6 +22,7 @@ import django  # noqa: E402
 
 django.setup()
 
+from axes.models import AccessAttempt  # noqa: E402
 from django.core.files.uploadedfile import SimpleUploadedFile  # noqa: E402
 from django.db import transaction  # noqa: E402
 from rest_framework.test import APIClient  # noqa: E402
@@ -67,7 +68,7 @@ def results(response):
 def counts():
     return (Branch.objects.count(), User.objects.count(), Trader.objects.count(), Transaction.objects.count(),
             Document.objects.count(), ExchangeRate.objects.count(), Hawala.objects.count(),
-            OfficeExpense.objects.count(), FieldConfig.objects.count())
+            OfficeExpense.objects.count(), FieldConfig.objects.count(), AccessAttempt.objects.count())
 
 
 class Rollback(Exception):
@@ -295,11 +296,39 @@ try:
               dari.status_code == 200 and [r['id'] for r in results(dari)] == [tx.id if tx else None]
               and bad.status_code == 400, f'dari={dari.status_code}, bad={bad.status_code}')
 
+        print('ح) باز کردن قفل حساب و حذف محافظت‌شده')
+        AccessAttempt.objects.create(username=manager_b.username, ip_address='10.9.9.9', user_agent='verify',
+                                     http_accept='', path_info='/api/auth/login/', get_data='', post_data='',
+                                     failures_since_start=5)
+        listed = {row['username']: row['is_locked'] for row in results(admin_client.get('/api/users/'))}
+        locked_out = login(manager_b.username)[1]
+        check('حساب قفل‌شده در فهرست کاربران is_locked=true دارد و ورودش ۴۲۳ است',
+              listed.get(manager_b.username) is True and listed.get(manager_a.username) is False
+              and locked_out.status_code == 423, f'listed={listed.get(manager_b.username)}, login={locked_out.status_code}')
+
+        denied = client_a.post(f'/api/users/{manager_b.id}/unlock/')
+        check('مدیر بندر نمی‌تواند قفل را باز کند (403)',
+              denied.status_code == 403 and AccessAttempt.objects.filter(username=manager_b.username).exists(),
+              f'status={denied.status_code}')
+
+        unlocked = admin_client.post(f'/api/users/{manager_b.id}/unlock/')
+        _, relogin = login(manager_b.username)
+        check('سوپر ادمین قفل را باز می‌کند: تلاش‌های axes پاک و ورود دوباره ۲۰۰',
+              unlocked.status_code == 200 and unlocked.data['reset'] >= 1
+              and not AccessAttempt.objects.filter(username=manager_b.username).exists()
+              and relogin.status_code == 200, f'status={unlocked.status_code}, data={unlocked.data}, login={relogin.status_code}')
+
+        protected = admin_client.delete(f'/api/branches/{branch_a.id}/')
+        check('حذف بندری که کاربر دارد → 409 با پیام دری (نه 500)',
+              protected.status_code == 409 and protected.data.get('code') == 'PROTECTED'
+              and 'کاربران' in protected.data['detail'] and Branch.objects.filter(pk=branch_a.id).exists(),
+              f'status={protected.status_code}, data={getattr(protected, "data", None)}')
+
         raise Rollback
 except Rollback:
     pass
 
-print('ح) پاک‌کاری')
+print('ط) پاک‌کاری')
 check('همهٔ داده‌های آزمایشی rollback شد', counts() == before, f'before={before}, after={counts()}')
 
 print()

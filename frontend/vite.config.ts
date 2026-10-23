@@ -24,6 +24,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Same-origin through the proxy, so Vite's own CORS layer is not needed — and it would
+    // answer every OPTIONS request itself (204, empty), hiding DRF's field/choice metadata.
+    cors: false,
     proxy: {
       '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
       '/media': { target: 'http://127.0.0.1:8000', changeOrigin: true },

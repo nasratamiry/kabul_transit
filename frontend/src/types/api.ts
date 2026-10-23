@@ -14,9 +14,12 @@ export interface Branch {
   id: number;
   name: string;
   code: string;
+  city: string;
   phone: string;
+  address: string;
+  is_active: boolean;
   user_count: number;
-  [field: string]: unknown;
+  created_at: string;
 }
 
 /** MeSerializer — GET /api/auth/me/ and the `user` of the login response. */
@@ -48,6 +51,64 @@ export interface User {
   is_superuser: boolean;
   last_login: string | null;
   date_joined: string;
+  /** axes lockout (too many failed logins); only filled in for a super admin. */
+  is_locked: boolean;
+}
+
+/** Currencies that have a daily rate (AFN is always 1 and never stored). */
+export type Currency = 'USD' | 'PKR' | 'EUR' | 'IRR';
+
+/** ExchangeRateSerializer — `date` is Shamsi 'YYYY-MM-DD', `rate` an 8-decimal string. */
+export interface ExchangeRate {
+  id: number;
+  date: string;
+  currency: Currency;
+  rate: string;
+  created_by: number | null;
+  created_at: string;
+}
+
+export type StatementSection = 'REVENUE' | 'COGS' | 'OPEX' | 'OTHER';
+
+/** StatementLineSerializer */
+export interface StatementLine {
+  id: number;
+  section: StatementSection;
+  code: string;
+  label_fa: string;
+  label_en: string;
+  source_field: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
+/** GET /api/statement-lines/{id}/history/ (newest first). */
+export interface StatementLineHistory {
+  history_id: number;
+  /** Dari label from simple-history: «ایجاد شد» / «تغییر کرد» / «حذف شد». */
+  type: string;
+  /** Backend dual_date(): 'Shamsi | Gregorian' text. */
+  date: string;
+  user: string | null;
+  values: Omit<StatementLine, 'id'>;
+}
+
+/** DRF OPTIONS metadata (SimpleMetadata); only what the UI reads. */
+export interface Choice {
+  value: string;
+  display_name: string;
+}
+
+export interface FieldMeta {
+  type: string;
+  required: boolean;
+  read_only: boolean;
+  label: string;
+  choices?: Choice[];
+}
+
+export interface OptionsMeta {
+  actions?: { POST?: Record<string, FieldMeta> };
 }
 
 /** POST /api/auth/login/ */

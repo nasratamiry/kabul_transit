@@ -30,14 +30,19 @@ class UserSerializer(KabulModelSerializer):
     password = serializers.CharField(label='رمز عبور', write_only=True, required=False,
                                      style={'input_type': 'password'})
     full_name = serializers.CharField(source='get_full_name', read_only=True, label='نام کامل')
+    is_locked = serializers.SerializerMethodField(label='قفل (axes)')
 
     class Meta:
         model = User
         fields = ('id', 'username', 'password', 'first_name', 'last_name', 'full_name', 'email', 'phone',
                   'role', 'branch', 'is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions',
-                  'last_login', 'date_joined')
+                  'last_login', 'date_joined', 'is_locked')
         read_only_fields = ('is_staff', 'is_superuser', 'groups', 'user_permissions', 'last_login', 'date_joined')
         digit_fields = ('phone',)
+
+    def get_is_locked(self, obj):
+        # Filled by UserViewSet for super admins only; everyone else just sees False.
+        return obj.username in self.context.get('locked_usernames', ())
 
     def validate(self, attrs):
         attrs = super().validate(attrs)

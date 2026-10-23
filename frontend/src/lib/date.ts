@@ -64,3 +64,109 @@ export function dualDate(d: DateInput): { shamsi: string; gregorian: string } {
 export function formatDate(d: DateInput, lang: string): string {
   return isRtlLang(lang) ? toShamsi(d) : toMoment(d).locale('en').format(ISO);
 }
+
+// ---------------------------------------------------------------------------
+// Shamsi calendar helpers for <DateInput>. Shamsi values are 'YYYY-MM-DD' strings with
+// English digits — exactly what the API's jDateField reads and writes.
+// ---------------------------------------------------------------------------
+
+/** Afghan (Dari/Pashto) solar month names; English uses the Dari names transliterated. */
+export const SHAMSI_MONTHS: Record<string, string[]> = {
+  fa: ['حمل', 'ثور', 'جوزا', 'سرطان', 'اسد', 'سنبله', 'میزان', 'عقرب', 'قوس', 'جدی', 'دلو', 'حوت'],
+  ps: [
+    'وری',
+    'غویی',
+    'غبرګولی',
+    'چنګاښ',
+    'زمری',
+    'وږی',
+    'تله',
+    'لړم',
+    'لیندۍ',
+    'مرغومی',
+    'سلواغه',
+    'کب',
+  ],
+  en: [
+    'Hamal',
+    'Sawr',
+    'Jawza',
+    'Saratan',
+    'Asad',
+    'Sunbula',
+    'Mizan',
+    'Aqrab',
+    'Qaws',
+    'Jadi',
+    'Dalw',
+    'Hut',
+  ],
+};
+
+/** Week starts on Saturday. */
+export const WEEKDAYS: Record<string, string[]> = {
+  fa: ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'],
+  ps: ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'],
+  en: ['Sa', 'Su', 'Mo', 'Tu', 'We', 'Th', 'Fr'],
+};
+
+/** Shamsi 'YYYY-MM-DD' (English digits) for a date. */
+export function shamsiKey(d: DateInput): string {
+  return toMoment(d).locale('fa').format(ISO);
+}
+
+/** Today in Kabul as Shamsi 'YYYY-MM-DD' with English digits (the API's own format). */
+export function todayShamsi(): string {
+  return shamsiKey(kabulToday());
+}
+
+/** Any accepted date text → Shamsi 'YYYY-MM-DD' (English digits), or null if invalid. */
+export function toShamsiKey(text: string): string | null {
+  try {
+    return shamsiKey(parseAnyDate(text));
+  } catch {
+    return null;
+  }
+}
+
+export interface ShamsiMonth {
+  year: number;
+  month: number; // 0-based
+  /** Leading blanks so day 1 lands on its weekday (Saturday = column 0). */
+  offset: number;
+  days: string[]; // Shamsi keys, day 1..n
+}
+
+export function shamsiMonth(year: number, month: number): ShamsiMonth {
+  const first = moment.from(`${year}-${String(month + 1).padStart(2, '0')}-01`, 'fa', ISO);
+  const count = moment.jDaysInMonth(year, month);
+  return {
+    year,
+    month,
+    offset: (first.day() + 1) % 7,
+    days: Array.from({ length: count }, (_, i) =>
+      first.clone().add(i, 'day').locale('fa').format(ISO),
+    ),
+  };
+}
+
+/** Shift a Shamsi key by days or Shamsi months. */
+export function shiftShamsi(key: string, amount: number, unit: 'day' | 'month'): string {
+  const m = moment.from(key, 'fa', ISO);
+  return (unit === 'day' ? m.add(amount, 'day') : m.add(amount, 'jMonth')).locale('fa').format(ISO);
+}
+
+/** API timestamp (ISO, UTC) → Kabul-time 'date time' in Shamsi (Persian digits) and Gregorian. */
+export function dualDateTime(iso: string): { shamsi: string; gregorian: string } {
+  const m = moment.utc(iso).utcOffset(KABUL_OFFSET_MINUTES);
+  return {
+    shamsi: toDariDigits(m.clone().locale('fa').format('YYYY-MM-DD HH:mm')),
+    gregorian: m.clone().locale('en').format('YYYY-MM-DD HH:mm'),
+  };
+}
+
+/** Backend dual_date() text 'Shamsi | Gregorian' → its two halves. */
+export function splitDualDate(text: string): { shamsi: string; gregorian: string } {
+  const [shamsi = text, gregorian = ''] = text.split(' | ');
+  return { shamsi: toDariDigits(shamsi.replace(/\//g, '-')), gregorian };
+}

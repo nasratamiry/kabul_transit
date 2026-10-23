@@ -1,15 +1,15 @@
 import { forwardRef, type FocusEvent, type InputHTMLAttributes } from 'react';
 
 import { cn } from '@/lib/cn';
-import { normalizeDigits } from '@/lib/digits';
+import { normalizeNumber } from '@/lib/digits';
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   invalid?: boolean;
 }
 
 /**
- * Numeric inputs accept Dari/Arabic digits; on blur they are rewritten to English digits so
- * what the form submits is exactly what the API parses. A real type="number" input rejects
+ * Numeric inputs accept Dari/Arabic digits and the '٫' decimal separator; on blur they are
+ * rewritten to English digits so what the form submits is exactly what the API parses. A real type="number" input rejects
  * ۱۲۳ before JS sees it, so numeric inputs render as type="text" with a numeric inputMode.
  */
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
@@ -20,7 +20,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
 
   function handleBlur(e: FocusEvent<HTMLInputElement>): void {
     if (numeric) {
-      const normalized = normalizeDigits(e.target.value);
+      const normalized = normalizeNumber(e.target.value);
       if (normalized !== e.target.value) {
         // Native setter + input event, so react-hook-form and controlled inputs see the change.
         const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
