@@ -101,6 +101,10 @@ export function PartnerPage({
 
   const [params, setParams] = useSearchParams();
   const active = params.get('is_active') ?? '';
+  // Only same-app paths are followed, never an absolute or protocol-relative URL
+  // ('//host', '/\host') from the query string.
+  const returnParam = params.get('return');
+  const returnTo = returnParam && /^\/(?![/\\])/.test(returnParam) ? returnParam : null;
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortState>({ key: 'name', dir: 'asc' });
   const debounced = useDebounced(search);
@@ -287,7 +291,20 @@ export function PartnerPage({
         sort={sort}
         onSort={onSort}
       />
-      {isNew && <PartnerDrawer ns={ns} endpoint={endpoint} fields={fields} onClose={goList} />}
+      {isNew && (
+        <PartnerDrawer
+          ns={ns}
+          endpoint={endpoint}
+          fields={fields}
+          onClose={returnTo ? () => navigate(returnTo) : goList}
+          onCreated={(r) => {
+            // Opened from another form's «add new» link: go back there with the new id.
+            if (returnTo)
+              navigate(`${returnTo}${returnTo.includes('?') ? '&' : '?'}new_${ns}=${r.id}`);
+            else goList();
+          }}
+        />
+      )}
       {editId && (
         <EditPartner ns={ns} endpoint={endpoint} fields={fields} id={editId} onClose={goList} />
       )}
@@ -321,7 +338,8 @@ function PartnerDrawer({
   fields,
   row,
   onClose,
-}: DrawerProps & { row?: Row }): JSX.Element {
+  onCreated,
+}: DrawerProps & { row?: Row; onCreated?: (row: Row) => void }): JSX.Element {
   const { t } = useTranslation();
   const key = [ns];
   const create = useCreate<Row, FieldValues>(endpoint, [key], {
@@ -348,9 +366,13 @@ function PartnerDrawer({
 
   async function onSubmit(values: FormValues): Promise<void> {
     try {
-      if (row) await update.mutateAsync({ id: row.id, data: values });
-      else await create.mutateAsync(values);
-      onClose();
+      if (row) {
+        await update.mutateAsync({ id: row.id, data: values });
+        onClose();
+      } else {
+        const created = await create.mutateAsync(values);
+        (onCreated ?? onClose)(created);
+      }
     } catch (err) {
       for (const [field, message] of Object.entries(fieldErrors(err))) setError(field, { message });
     }

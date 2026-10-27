@@ -29,6 +29,9 @@ from accounts.models import Branch, User  # noqa: E402
 from finance.management.commands.seed_statement_lines import STANDARD_LINES  # noqa: E402
 from finance.models import ExchangeRate, StatementLine  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from e2e_history import purge_history  # noqa: E402
+
 TEST_USERS = ['e2e_sa2', 'e2e_mgr2']
 TEST_BRANCHES = ['TESTKC', 'DELKC']
 RESTORE = {'OPEX_OFFICE', 'COGS_SEAL'}
@@ -47,9 +50,13 @@ with transaction.atomic():
         rates, _ = ExchangeRate.objects.filter(created_by=admin).delete()
     else:
         rates = 0
+    branch_ids = list(Branch.objects.filter(code__in=TEST_BRANCHES).values_list('id', flat=True))
     users, _ = User.objects.filter(username__in=TEST_USERS).delete()
     branches, _ = Branch.objects.filter(code__in=TEST_BRANCHES).delete()
     attempts, _ = AccessAttempt.objects.filter(username__in=TEST_USERS).delete()
+    # Branches deleted during the run (DELKC) are gone already; their history matches by code.
+    audit = purge_history(TEST_BRANCHES, TEST_USERS, admin.id if admin else None, branch_ids)
 
 print(f'removed: users={users}, branch rows (incl. FieldConfig)={branches}, rates={rates}, '
-      f'axes={attempts}, statement-line history={history}; restored {sorted(RESTORE)}')
+      f'axes={attempts}, statement-line history={history}, other history={audit}; '
+      f'restored {sorted(RESTORE)}')

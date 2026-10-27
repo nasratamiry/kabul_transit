@@ -28,7 +28,7 @@ interface NavItem {
 
 const MAIN: NavItem[] = [
   { label: 'nav.dashboard', icon: LayoutDashboard, to: '/dashboard' },
-  { label: 'nav.transactions', icon: ArrowLeftRight },
+  { label: 'nav.transactions', icon: ArrowLeftRight, to: '/transactions' },
   { label: 'nav.finance', icon: Wallet },
   { label: 'nav.income_statement', icon: FileBarChart },
 ];

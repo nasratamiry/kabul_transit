@@ -103,7 +103,7 @@ function UserMenu(): JSX.Element | null {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={t('common.user_menu')}
+        aria-label={`${user.full_name} — ${t('common.user_menu')}`}
         data-testid="user-menu"
         className={cn(iconButton, 'flex items-center gap-1.5')}
       >

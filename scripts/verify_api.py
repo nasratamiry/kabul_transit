@@ -296,6 +296,7 @@ try:
               dari.status_code == 200 and [r['id'] for r in results(dari)] == [tx.id if tx else None]
               and bad.status_code == 400, f'dari={dari.status_code}, bad={bad.status_code}')
 
+        counts_tx = Transaction.objects.count()
         print('ح) باز کردن قفل حساب و حذف محافظت‌شده')
         AccessAttempt.objects.create(username=manager_b.username, ip_address='10.9.9.9', user_agent='verify',
                                      http_accept='', path_info='/api/auth/login/', get_data='', post_data='',
@@ -324,11 +325,39 @@ try:
               and 'کاربران' in protected.data['detail'] and Branch.objects.filter(pk=branch_a.id).exists(),
               f'status={protected.status_code}, data={getattr(protected, "data", None)}')
 
+        print('ط) پیش‌نمایش خلاصهٔ ردیف و صفحه‌بندی معاملات')
+        preview = admin_client.post('/api/transactions/preview-summary/', {
+            'branch': branch_a.id, 'currency': 'AFN', 'customer_payment': '۱۰٬۰۰۰',
+            'revenue_transport': '2000', 'tariff_expense': '3000', 'expense_labor': 'not-a-number',
+        }, format='json')
+        usd = admin_client.post('/api/transactions/preview-summary/', {
+            'currency': 'USD', 'exchange_rate': '70', 'customer_payment': '100', 'tariff_expense': '30',
+        }, format='json')
+        check('preview-summary: «عواید ترانسپورت» مصرف حساب می‌شود؛ ورودی خراب = ۰؛ دالری با نرخ خودش',
+              preview.status_code == 200 and preview.data['customer_payment_afn'] == '10000.00'
+              and preview.data['total_expense_afn'] == '5000.00' and preview.data['profit_or_loss_afn'] == '5000.00'
+              and preview.data['profit_or_loss_usd'] is None
+              and usd.data['profit_or_loss_afn'] == '4900.00' and usd.data['profit_or_loss_usd'] == '70.00'
+              and Transaction.objects.count() == counts_tx,
+              f'afn={preview.data}, usd={usd.data}')
+
+        other = client_a.post('/api/transactions/preview-summary/', {'branch': branch_b.id, 'customer_payment': '1'},
+                              format='json')
+        own = client_a.post('/api/transactions/preview-summary/', {'branch': branch_a.id, 'customer_payment': '1'},
+                            format='json')
+        check('preview-summary: مدیر بندر برای بندر دیگر ۴۰۳، برای بندر خودش ۲۰۰',
+              other.status_code == 403 and own.status_code == 200, f'other={other.status_code}, own={own.status_code}')
+
+        paged = admin_client.get('/api/transactions/', {'page_size': 1})
+        check('فهرست معاملات صفحه‌بندی دارد (count / next / results)',
+              paged.status_code == 200 and isinstance(paged.data, dict) and len(paged.data['results']) == 1
+              and paged.data['count'] >= 2 and paged.data['next'], f'data keys={list(getattr(paged, "data", {}) or {})}')
+
         raise Rollback
 except Rollback:
     pass
 
-print('ط) پاک‌کاری')
+print('ی) پاک‌کاری')
 check('همهٔ داده‌های آزمایشی rollback شد', counts() == before, f'before={before}, after={counts()}')
 
 print()

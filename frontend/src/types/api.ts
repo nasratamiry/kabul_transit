@@ -79,6 +79,69 @@ export interface TransportCompany {
   created_at: string;
 }
 
+/** TransactionSerializer.row_summary — USD figures are null unless the record is in USD. */
+export interface RowSummary {
+  total_expense_afn: string;
+  fee_per_dollar_afn: string | null;
+  total_expense_usd: string | null;
+  profit_or_loss_afn: string;
+  profit_or_loss_usd: string | null;
+}
+
+/** TransactionSerializer (fields='__all__' + extras). Money fields are decimal strings. */
+export interface Transaction {
+  id: number;
+  branch: number;
+  trade_type: 'IMPORT' | 'EXPORT' | 'TRANSIT' | 'TIR_CARNET';
+  serial_number: string;
+  /** Shamsi 'YYYY-MM-DD'. */
+  date: string;
+  status: 'WAITING' | 'SEALED' | 'EXITED';
+  motabari: boolean;
+  currency: 'AFN' | 'USD' | 'PKR' | 'EUR' | 'IRR';
+  exchange_rate: string;
+  customer_payment: string;
+  balance: string;
+  trader: number | null;
+  trader_name: string | null;
+  transport_company: number | null;
+  transport_company_name: string | null;
+  plate_afghan: string;
+  plate_foreign: string;
+  row_summary: RowSummary;
+  documents_count: number;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
+  /** The other editable fields (see lib/transactionSections.ts). */
+  [field: string]: unknown;
+}
+
+/** GET /api/form-config/ — hidden fields are already left out, sorted by sort_order. */
+export interface FormConfig {
+  branch: number;
+  trade_type: Transaction['trade_type'];
+  trade_type_label: string;
+  form_fields: {
+    field_name: string;
+    label_fa: string;
+    visibility: 'REQUIRED' | 'OPTIONAL';
+    required: boolean;
+    sort_order: number;
+  }[];
+}
+
+/** POST /api/transactions/preview-summary/ */
+export interface PreviewSummary {
+  currency: Transaction['currency'];
+  customer_payment_afn: string;
+  total_expense_afn: string;
+  profit_or_loss_afn: string;
+  fee_per_dollar_afn: string | null;
+  total_expense_usd: string | null;
+  profit_or_loss_usd: string | null;
+}
+
 /** Currencies that have a daily rate (AFN is always 1 and never stored). */
 export type Currency = 'USD' | 'PKR' | 'EUR' | 'IRR';
 

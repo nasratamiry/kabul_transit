@@ -32,6 +32,9 @@ from finance.models import ExchangeRate  # noqa: E402
 from operations.models import Transaction  # noqa: E402
 from partners.models import Trader, TransportCompany  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from e2e_history import purge_history  # noqa: E402
+
 PASSWORD = 'E2e-Stage11-Pass-2026'
 BRANCHES = {'E2E11A': 'بندر آزمایشی ۱۱ الف', 'E2E11B': 'بندر آزمایشی ۱۱ ب'}
 MANAGERS = {'e2e_mgr': 'E2E11A', 'e2e_mgr_b': 'E2E11B'}
@@ -61,9 +64,10 @@ def setup():
 def cleanup():
     with transaction.atomic():
         admin = User.objects.filter(username='e2e_admin').first()
-        txns = Transaction.objects.filter(branch__code__in=BRANCHES)
-        txn_history = Transaction.history.filter(branch__code__in=BRANCHES).delete()[0]
-        txn_count = txns.delete()[0]
+        branch_ids = list(Branch.objects.filter(code__in=BRANCHES).values_list('id', flat=True))
+        txn_count = Transaction.objects.filter(branch_id__in=branch_ids).delete()[0]
+        # After the delete: deleting writes one more «-» history row per transaction.
+        txn_history = Transaction.history.filter(branch_id__in=branch_ids).delete()[0]
         traders = Trader.objects.filter(name__startswith=TRADER_PREFIX).delete()[0]
         companies = TransportCompany.objects.filter(name__startswith=COMPANY_PREFIX).delete()[0]
         history = (Trader.history.filter(name__startswith=TRADER_PREFIX).delete()[0]
@@ -72,9 +76,10 @@ def cleanup():
         users = User.objects.filter(username__in=USERS).delete()[0]
         branches = Branch.objects.filter(code__in=BRANCHES).delete()[0]
         attempts = AccessAttempt.objects.filter(username__in=USERS).delete()[0]
+        audit = purge_history(BRANCHES, USERS, admin.id if admin else None, branch_ids)
     print(f'removed: transactions={txn_count} (+{txn_history} history), traders={traders}, '
           f'companies={companies}, partner history={history}, rates={rates}, users={users}, '
-          f'branch rows (incl. FieldConfig)={branches}, axes={attempts}')
+          f'branch rows (incl. FieldConfig)={branches}, axes={attempts}, other history={audit}')
 
 
 if __name__ == '__main__':

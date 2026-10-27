@@ -159,3 +159,51 @@ node scripts/verify-stage11.mjs ..\stage11_screenshots
 
 Check 11 (history modal) is not part of this stage: the API has no history endpoint for
 partners. Lighthouse accessibility on both partner pages should be ≥ 95.
+
+---
+
+# Stage 12a — transactions list + dynamic form
+
+```powershell
+cd "D:\Kabul Cargo TN\frontend"
+..\.venv\Scripts\python scripts\cleanup-stage12a.py --setup   # users, branches E2E12A/E2E12B, traders, USD rate
+node scripts/verify-stage12a.mjs ..\stage12a_screenshots
+..\.venv\Scripts\python scripts\cleanup-stage12a.py           # also removes the history rows of the test data
+```
+
+Before starting the dev servers, make sure nothing is still listening on 8000 / 5173: on
+Windows a stopped `npm run dev` can leave vite running, and two servers can share a port
+(the old one then answers with old code). Start vite as `node node_modules/vite/bin/vite.js`.
+
+| #   | Check                                                                            |
+| --- | -------------------------------------------------------------------------------- |
+| 1   | `/transactions` empty state                                                      |
+| 2   | API-created rows of this month listed (default window = current Shamsi month)    |
+| 2b  | Profit green, loss red                                                           |
+| 3   | Shamsi date range typed in Dari digits                                           |
+| 4–8 | Trade type, trader (SearchSelect), serial search, branch filters; clear filters  |
+| 9   | Pagination (25 per page), `page=2` in the URL                                    |
+| 10  | Row click → `/transactions/:id/edit`                                             |
+| 11  | branch_manager: own branch only, no branch filter                                |
+| 12  | No USD rate today → «معاملهٔ تازه» disabled with hint                            |
+| 13  | `/transactions/new`: 4 trade-type cards + branch context                         |
+| 14  | EXPORT form renders                                                              |
+| 15  | 7 sections; required fields marked                                               |
+| 16  | FieldConfig-hidden fields not rendered (truck_type hidden for E2E12A/EXPORT)     |
+| 17  | Live preview: 10 000 − 2 000 (عواید ترانسپورت is an expense) − 3 000 = +5 000 ؋  |
+| 18  | Missing required fields → inline errors, no request                              |
+| 19  | Save → 201, toast with serial, list of that day with the row highlighted         |
+| 20  | Dari digits in money fields normalized on blur                                   |
+| 21  | Currency USD → exchange_rate shown and required                                  |
+| 22  | exchange_rate pre-filled from the day’s rate; USD preview                        |
+| A   | «Add new trader» from the form → back with the new trader selected, form kept    |
+| 23  | Rate deleted → submit → 428 → full-page notice with CTA                          |
+| 24  | Enter the rate, come back → form restored from sessionStorage → saves            |
+| 25  | Edit form pre-filled                                                             |
+| 26  | Edit → PATCH → toast → list updated                                              |
+| 27  | branch_manager opens another branch’s transaction → not-available page (API 404) |
+| 28  | super_admin picker: branch first                                                 |
+| 29  | super_admin: chosen branch saved                                                 |
+| 30  | preview-summary math (API)                                                       |
+| 31  | preview-summary for another branch → 403                                         |
+| E   | No uncaught page errors                                                          |

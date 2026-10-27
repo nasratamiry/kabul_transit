@@ -170,3 +170,13 @@ export function splitDualDate(text: string): { shamsi: string; gregorian: string
   const [shamsi = text, gregorian = ''] = text.split(' | ');
   return { shamsi: toDariDigits(shamsi.replace(/\//g, '-')), gregorian };
 }
+
+/** First and last day of the current Shamsi month in Kabul, as Shamsi keys. */
+export function currentShamsiMonth(): { from: string; to: string } {
+  const [y = 1405, m = 1] = todayShamsi().split('-').map(Number);
+  const month = shamsiMonth(y, m - 1);
+  return {
+    from: month.days[0] ?? todayShamsi(),
+    to: month.days[month.days.length - 1] ?? todayShamsi(),
+  };
+}

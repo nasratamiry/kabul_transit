@@ -1,10 +1,13 @@
 import { isRtlLang, normalizeDigits, toDariDigits } from './digits';
 
-export type Currency = 'AFN' | 'USD';
+export type Currency = 'AFN' | 'USD' | 'PKR' | 'EUR' | 'IRR';
 
 const SYMBOL: Record<Currency, { rtl: string; ltr: string }> = {
   AFN: { rtl: '؋', ltr: 'AFN' },
   USD: { rtl: '$', ltr: '$' },
+  PKR: { rtl: 'کلدار', ltr: 'PKR' },
+  EUR: { rtl: '€', ltr: '€' },
+  IRR: { rtl: 'تومان', ltr: 'IRR' },
 };
 
 /**
@@ -29,7 +32,9 @@ export function formatMoney(
   const number = `${negative ? '-' : ''}${grouped}${rtl ? '٫' : '.'}${frac.dec}`;
 
   if (rtl) return `${toDariDigits(number)} ${SYMBOL[currency].rtl}`;
-  return currency === 'USD' ? `$${number}` : `${number} AFN`;
+  return currency === 'USD' || currency === 'EUR'
+    ? `${SYMBOL[currency].ltr}${number}`
+    : `${number} ${SYMBOL[currency].ltr}`;
 }
 
 /** Round half-up to 2 decimals on digit strings. */

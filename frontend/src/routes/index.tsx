@@ -10,6 +10,9 @@ import { Login } from '@/pages/Login';
 import { Traders } from '@/pages/partners/Traders';
 import { TransportCompanies } from '@/pages/partners/TransportCompanies';
 import { NotFound } from '@/pages/NotFound';
+import { TradeTypePicker } from '@/pages/transactions/TradeTypePicker';
+import { TransactionForm } from '@/pages/transactions/TransactionForm';
+import { TransactionsList } from '@/pages/transactions/TransactionsList';
 
 import { HomeRedirect } from './HomeRedirect';
 import { RequireAuth } from './RequireAuth';
@@ -43,6 +46,21 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <HomeRedirect /> },
       { path: 'dashboard', element: <Dashboard />, handle: crumb('nav.dashboard') },
+      {
+        // Both roles; a branch manager only ever sees their own branch (API queryset).
+        path: 'transactions',
+        handle: crumb('nav.transactions'),
+        children: [
+          { index: true, element: <TransactionsList /> },
+          { path: 'new', element: <TradeTypePicker />, handle: crumb('common.add') },
+          {
+            path: 'new/:tradeType',
+            element: <TransactionForm />,
+            handle: crumb('common.add'),
+          },
+          { path: ':id/edit', element: <TransactionForm />, handle: crumb('common.edit') },
+        ],
+      },
       {
         // Company-wide partners: both roles (no RequireRole).
         path: 'partners',
