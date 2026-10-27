@@ -251,6 +251,16 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
   - E2E «کپی به همهٔ بندرها» بندرهای واقعی را هم تغییر می‌دهد؛ fixture قبلش snapshot می‌گیرد و cleanup برمی‌گرداند.
   - آزمایش: `verify_field_config.py` + `cleanup-field-settings.py --setup` → `verify-field-settings.mjs` (۲۲)
     → `cleanup-field-settings.py`؛ `lighthouse-field-settings.mjs`.
+- [x] بررسی نهایی آمادگی + GitHub + بستهٔ Coolify (`docs/GO_LIVE.md`، `docs/stages/FINAL_READINESS.md`)
+  - پنل Django در `settings.ADMIN_URL` (env؛ production `admin/` را رد می‌کند): `/admin/...` مال صفحه‌های React است.
+    `admin.site` فقط نقش super_admin. nginx از `deploy/nginx/default.conf.template` (فقط `${ADMIN_URL}` جایگزین می‌شود).
+  - NAT دفتر: axes فقط بر اساس username؛ محافظ IP = `LOGIN_FAILURE_RATE` (۲۰/دقیقه)؛ anon ۶۰/دقیقه (همه از env).
+  - compose: سرویس‌ها `kabulcargo_db/_redis/_backend/_web`، بدون هیچ پورت روی host، mem_limit؛ دامنه از
+    `APP_DOMAIN`. بک‌اپ روی Coolify = Scheduled Task؛ سرویس backup فقط در `docker-compose.vps.yml`.
+  - `requirements.txt` = تولید (gunicorn و redis هم)؛ `requirements-dev.txt` = ابزارها. image ها فقط کد اجرایی.
+  - گزارش‌های مرحله فقط در `_local/` (git-ignored)؛ خلاصه در `docs/PROJECT_HISTORY.md`. `.claude/` و `.cursor/` در Git نیستند.
+  - fixtureهای E2E با `settings_production` اجرا نمی‌شوند (`e2e_history.py`). `verify_kabul_day.py` در run_all_checks.
+  - stack test: `scripts/prod_stack_test.sh` (لینوکس) / GitHub Actions «Production stack test» (دستی).
 - [ ] فاز دوم: Transaction، FieldConfig، نرخ، فرانت (بعد از رسیدن اکسل جدید)
 
 ## graphify
