@@ -198,7 +198,7 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
   - نرخ دالر یک تاریخ فقط از `finance.utils.usd_rate_on` / `UsdRateTable` (گزارش عاید و مدل هر دو).
     فهرست‌ها با `attach_usd_rates` نرخ‌ها را یکجا بار می‌کنند (بدون N+1).
   - فایل سند فقط از `GET /api/documents/<id>/download/`؛ API نشانی `/media/` نمی‌دهد. production:
-    `DOCUMENT_X_ACCEL_PREFIX` + `deploy/nginx-documents.conf` (`/media/` عمومی نیست). حذف سند فایل را هم پاک می‌کند.
+    `DOCUMENT_X_ACCEL_PREFIX` + `deploy/nginx/default.conf` (`/media/` عمومی نیست). حذف سند فایل را هم پاک می‌کند.
   - `api/history.py` → `HistoryMixin` (فقط فیلدهای تغییرکرده) روی معامله، تاجر، شرکت، حواله، مصرف دفتر.
   - مدیر بندر فقط نرخ امروز را می‌سازد؛ ویرایش/حذف نرخ فقط سوپر ادمین. حذف معامله: هر دو نقش (بندر خود).
   - آزمایش: `cleanup-stage12b.py --setup` → `verify-stage12b.mjs` (۲۱) → `cleanup-stage12b.py`.
@@ -215,6 +215,21 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
   - `GET /api/dashboard/summary/` (`finance/dashboard.py`) — همهٔ ارقام از `income_statement`؛ داشبورد و گزارش هرگز فرق ندارند.
   - Excel: `api/excel.py` (openpyxl) → `/api/income-statement/export/` و `/api/transactions/export/` (همهٔ ردیف‌های فیلترشده)؛ هر خروجی در لاگ امنیتی.
   - آزمایش: `cleanup-stage14.py --setup` → `verify-stage14.mjs` (۲۵ تست) → `cleanup-stage14.py`.
+  - روز به روز / بندر به بندر: `income_statement(..., breakdown=True)` → `daily` و `branches` از همان محاسبه (`_Buckets`).
+  - drill-down: `/transactions/?nonzero=<فیلد>` و `/office-expenses/?kind=salary|non_salary`.
+  - فهرست بندرها (`useBranches` در `lib/finance.ts`) فقط برای سوپر ادمین و ۵ دقیقه cache؛ هر صفحه
+    درخواست کم بفرستد (محدودیت ۱۰۰ در دقیقه). E2E روی 429، `Retry-After` را صبر می‌کند.
+- [x] مرحلهٔ ۱۵: آمادگی production (Docker) — نصب واقعی هنوز نشده
+  - همهٔ آزمایش‌ها با یک دستور: `scripts\run_all_checks.ps1` (یا `.sh`) → ۶ اسکریپت بک‌اند + typecheck/lint/build
+    + همهٔ E2E با setup/cleanup. سرورهای خودش روی 8010/5183 (به 8000/5173 دست نمی‌زند)؛ خروجی `checks-output/`.
+  - stack: `Dockerfile` (gunicorn، کاربر غیر root)، `deploy/nginx/` (SPA + proxy + X-Accel)، `docker-compose.yml`
+    (mysql 8.4، redis لازم، backend، backup، nginx) + `docker-compose.vps.yml` (Caddy/SSL) + `docker-compose.local.yml` (فقط آزمایش).
+  - `GET /api/health/` (دیتابیس + cache، بدون throttle). `manage.py restore_db --drill` تمرین بازیابی.
+  - `KC_LOCAL_HTTP_TEST` فقط با ALLOWED_HOSTS=localhost؛ با دامنهٔ واقعی Django روشن نمی‌شود.
+  - React Router 7: ناوبری در transition است — URL قبل از رندر عوض می‌شود. E2E بعد از `waitForURL` منتظر خود
+    عنصر (drawer/h1) بماند، نه فقط URL. `navigate()` حالا Promise برمی‌گرداند (`void navigate(...)`).
+  - کود بندر بعد از ثبت تغییرناپذیر است (serializer + admin).
+  - آزمایش stack: `scripts\prod_local_test.ps1` (Docker Desktop + WSL 2 لازم). راهنماها: `docs/DEPLOY.md`، `docs/USER_GUIDE.md`.
 - [ ] فاز دوم: Transaction، FieldConfig، نرخ، فرانت (بعد از رسیدن اکسل جدید)
 
 ## graphify

@@ -73,6 +73,19 @@ def login(ip, username, password=PASSWORD):
     return client, response
 
 
+def fresh_rate_window(ip, needed_seconds=15):
+    """
+    django-ratelimit counts in fixed one-minute windows whose edge depends on the key (the IP).
+    Six logins that straddle an edge are split across two windows and the sixth is not refused,
+    which made test 01 fail now and then. Wait for the next window when too little of this one
+    is left.
+    """
+    from django_ratelimit.core import _get_window  # the library's own edge, not a copy of it
+    left = _get_window(ip, 60) - time.time()
+    if left < needed_seconds:
+        time.sleep(left + 1)
+
+
 def code_of(response):
     data = getattr(response, 'data', None)
     if data is None:
@@ -128,6 +141,7 @@ try:
         txn = Transaction.objects.create(branch=branch, trade_type='EXPORT', serial_number='ZZ-SEC-1')
 
         print('الف) محدودیت تعداد درخواست (Rate limiting)')
+        fresh_rate_window('10.7.0.1')
         statuses = [login('10.7.0.1', f'zz_nobody_{i}', 'wrong')[1] for i in range(6)]
         sixth = statuses[-1]
         check('۶ تلاش ناموفق از یک IP → ششمی ۴۲۹ (TOO_MANY_LOGIN_ATTEMPTS)',
@@ -273,6 +287,15 @@ try:
                                                 CORS_ALLOWED_ORIGINS='https://app.kabulcargo.example')
         check('SECRET_KEY کوتاه → ImproperlyConfigured', rc_short != 0 and 'ImproperlyConfigured' in err_short,
               err_short.strip().splitlines()[-1][:110] if err_short.strip() else f'rc={rc_short}')
+        rc_flag, _, err_flag = run_production('', ALLOWED_HOSTS='kabulcargo.example', KC_LOCAL_HTTP_TEST='true',
+                                              CORS_ALLOWED_ORIGINS='https://app.kabulcargo.example')
+        rc_local, out_local, _ = run_production(
+            'from django.conf import settings as s; print(s.SECURE_SSL_REDIRECT, s.SESSION_COOKIE_SECURE)',
+            ALLOWED_HOSTS='localhost,127.0.0.1', KC_LOCAL_HTTP_TEST='true', CORS_ALLOWED_ORIGINS='http://localhost:8080')
+        check('KC_LOCAL_HTTP_TEST با دامنهٔ واقعی → ImproperlyConfigured؛ فقط با localhost HTTPS را خاموش می‌کند',
+              rc_flag != 0 and 'KC_LOCAL_HTTP_TEST' in err_flag and rc_local == 0
+              and out_local.strip().splitlines()[-1] == 'False False',
+              f'real={rc_flag}, local={out_local.strip()[-20:]}')
         check('ALLOWED_HOSTS و CORS از env خوانده می‌شوند',
               prod.get('hosts') == ['127.0.0.1', 'kabulcargo.example']
               and prod.get('cors') == ['https://app.kabulcargo.example'],

@@ -340,6 +340,9 @@ await step(14, 'No USD rate today → red banner + CTA', async () => {
   await page.locator('h1').click();
   await page.keyboard.press('r');
   await page.waitForURL('**/exchange-rates/new', { timeout: 5000 });
+  // React Router 7 renders a navigation in a transition: the URL changes before the drawer is
+  // on screen, and an Escape pressed in between has nothing to close yet.
+  await page.waitForSelector('[role=dialog]');
   const title = await page.getAttribute('[data-testid=add-rate]', 'title');
   check(
     '14b',
@@ -394,8 +397,10 @@ await step(16, 'Future date → backend 400 → Dari error under the date', asyn
 
 await step(17, 'AFN not offered; API rejects AFN with a Dari 400', async () => {
   await page.click('[data-testid=add-rate]');
+  await page.waitForSelector('[role=dialog] select[name=currency] option', { state: 'attached' });
   const options = await page.locator('select[name=currency] option').allTextContents();
   await page.keyboard.press('Escape');
+  await page.waitForURL(/\/exchange-rates$/);
   const r = await api('POST', '/exchange-rates/', {
     date: await shamsiShift(0),
     currency: 'AFN',
@@ -405,7 +410,10 @@ await step(17, 'AFN not offered; API rejects AFN with a Dari 400', async () => {
   check(
     17,
     'AFN not offered; API rejects AFN with a Dari 400',
-    !options.some((o) => o.includes('AFN')) && r.status === 400 && DARI.test(msg),
+    options.length > 0 &&
+      !options.some((o) => o.includes('AFN')) &&
+      r.status === 400 &&
+      DARI.test(msg),
     `options=${options.join('|')}, status=${r.status}, ${msg}`,
   );
 });

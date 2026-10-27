@@ -3,7 +3,7 @@ import { Info, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { useMatch, useNavigate } from 'react-router-dom';
+import { useMatch, useNavigate } from 'react-router';
 import { z } from 'zod';
 
 import { TodayRateBanner } from '@/components/admin/TodayRateBanner';

@@ -53,6 +53,10 @@ class BranchAdmin(SimpleHistoryAdmin):
         ('تاریخ‌ها', {'fields': ('created_display',)}),
     )
 
+    def get_readonly_fields(self, request, obj=None):
+        # Same rule as the API: the code is fixed once the branch exists.
+        return self.readonly_fields + (('code',) if obj else ())
+
     @admin.display(description='تاریخ ثبت (شمسی | میلادی)')
     def created_display(self, obj):
         return dual_date(obj.created_at)

@@ -1,0 +1,7 @@
+# Only the frontend sources and the nginx config go into the nginx image.
+*
+!frontend
+!deploy/nginx
+frontend/node_modules
+frontend/dist
+frontend/scripts

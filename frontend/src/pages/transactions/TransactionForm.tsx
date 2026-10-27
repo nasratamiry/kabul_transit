@@ -6,14 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm, useWatch, type Control, type UseFormRegister } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import {
-  Link,
-  Navigate,
-  useLocation,
-  useNavigate,
-  useParams,
-  useSearchParams,
-} from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { z } from 'zod';
 
 import { TodayRateDialog } from '@/components/finance/TodayRateDialog';

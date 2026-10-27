@@ -1,6 +1,6 @@
 import { AlertTriangle, ArrowLeft, CheckCircle2, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';

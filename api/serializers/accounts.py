@@ -20,6 +20,13 @@ class BranchSerializer(KabulModelSerializer):
         count = getattr(obj, 'user_count', None)
         return count if count is not None else obj.users.count()
 
+    def validate_code(self, value):
+        # The code is the branch's permanent identifier (serial numbers, reports, backups refer
+        # to it): set once on create, never changed. Re-sending the same code is fine.
+        if self.instance is not None and value != self.instance.code:
+            raise serializers.ValidationError('کود بندر بعد از ثبت تغییر کرده نمی‌تواند.')
+        return value
+
 
 class UserSerializer(KabulModelSerializer):
     """

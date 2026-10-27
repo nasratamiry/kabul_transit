@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 import { useAuth } from '@/stores/auth';
 import type { Branch, OfficeExpenseCategory, Paginated } from '@/types/api';

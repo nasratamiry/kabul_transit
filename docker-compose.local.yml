@@ -1,0 +1,18 @@
+# LOCAL TEST ONLY — the production stack on a developer machine over plain HTTP.
+# Never use this file on a server: KC_LOCAL_HTTP_TEST switches off HTTPS-only cookies and HSTS,
+# and Django refuses to start with it unless ALLOWED_HOSTS is just localhost / 127.0.0.1.
+#   scripts/prod_local_test.ps1   (uses .env.local-test)
+services:
+  backend:
+    environment:
+      KC_LOCAL_HTTP_TEST: "true"
+      TRUSTED_PROXY_COUNT: "1"   # only nginx in front
+  backup:
+    environment:
+      KC_LOCAL_HTTP_TEST: "true"
+  nginx:
+    ports:
+      - "127.0.0.1:8080:80"
+  mysql:
+    ports:
+      - "127.0.0.1:3307:3306"   # the E2E fixture scripts run on the host

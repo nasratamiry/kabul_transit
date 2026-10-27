@@ -1,4 +1,4 @@
-import { createBrowserRouter, Outlet } from 'react-router-dom';
+import { createBrowserRouter, Outlet } from 'react-router';
 
 import { AppShell } from '@/components/layout/AppShell';
 import { Branches } from '@/pages/admin/Branches';

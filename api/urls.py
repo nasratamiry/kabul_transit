@@ -2,7 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from api.views import accounts, auth, config, finance, operations, partners, reports
+from api.views import accounts, auth, config, finance, health, operations, partners, reports
 
 router = DefaultRouter()
 router.register('branches', accounts.BranchViewSet, basename='branch')
@@ -18,6 +18,7 @@ router.register('field-configs', config.FieldConfigViewSet, basename='field-conf
 router.register('statement-lines', reports.StatementLineViewSet, basename='statement-line')
 
 urlpatterns = [
+    path('health/', health.health, name='api_health'),
     path('auth/login/', auth.LoginView.as_view(), name='api_login'),
     path('auth/refresh/', TokenRefreshView.as_view(), name='api_refresh'),
     path('auth/logout/', auth.logout, name='api_logout'),

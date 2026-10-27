@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Controller, useForm, type FieldValues } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useMatch, useNavigate, useSearchParams } from 'react-router';
 import { z } from 'zod';
 
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -121,7 +121,9 @@ export function PartnerPage({
     return sort.dir === 'asc' ? sorted : sorted.reverse();
   }, [list.data, sort]);
 
-  const goList = (): void => navigate(`${base}${query}`);
+  const goList = (): void => {
+    void navigate(`${base}${query}`);
+  };
 
   function setActive(value: string): void {
     setParams((p) => {

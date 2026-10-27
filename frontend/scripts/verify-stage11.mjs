@@ -303,17 +303,27 @@ await step(12, 'Transport companies: create, edit, unique name 400, delete', asy
 let tm = null;
 await step(13, 'branch_manager sees «شرکا», both pages open, no «مدیریت»', async () => {
   const mgr = await session('e2e_mgr');
+  await mgr
+    .locator('[data-testid=nav-partners]')
+    .waitFor({ timeout: 10000 })
+    .catch(() => {});
   const partnersNav = await mgr.locator('[data-testid=nav-partners]').isVisible();
   const adminNav = await mgr.locator('[data-testid=nav-admin]').count();
   await mgr.click('[data-testid=nav-partners] >> text=تاجران');
   await mgr.waitForURL('**/partners/traders');
   await mgr.waitForSelector('[data-testid=add-partner]');
   await mgr.goto(`${BASE}/partners/transport-companies`);
+  // Wait for the page itself (React Router 7 renders the route after the load event).
+  await mgr
+    .locator('h1', { hasText: 'شرکت‌های ترانسپورت' })
+    .waitFor({ timeout: 10000 })
+    .catch(() => {});
   const h1 = await mgr.locator('h1').textContent();
   check(
     13,
     'branch_manager sees «شرکا», both pages open, no «مدیریت»',
     partnersNav && adminNav === 0 && h1 === 'شرکت‌های ترانسپورت',
+    `partnersNav=${partnersNav} adminNav=${adminNav} h1=${h1}`,
   );
   await mgr.goto(`${BASE}/partners/traders`);
   await mgr.screenshot({ path: `${SHOTS}/05-traders-branch-manager.png` });

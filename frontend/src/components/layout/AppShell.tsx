@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, Outlet, useMatches } from 'react-router-dom';
+import { Link, Outlet, useMatches } from 'react-router';
 
 import { isRtlLang } from '@/lib/digits';
 import type { RouteHandle } from '@/routes';

@@ -3,7 +3,7 @@ import { KeyRound, Lock, Pencil, Plus, Search, Unlock, UserCheck, UserX } from '
 import { useMemo, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { useMatch, useNavigate } from 'react-router-dom';
+import { useMatch, useNavigate } from 'react-router';
 import { z } from 'zod';
 
 import { PageHeader } from '@/components/layout/PageHeader';

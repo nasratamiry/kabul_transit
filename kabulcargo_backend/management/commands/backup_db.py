@@ -21,12 +21,17 @@ WINDOWS_DEFAULT = Path(r'C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqldump.e
 def find_mysqldump():
     if settings.MYSQLDUMP_PATH:
         return settings.MYSQLDUMP_PATH
-    found = shutil.which('mysqldump')
+    found = shutil.which('mysqldump') or shutil.which('mariadb-dump')
     if found:
         return found
     if WINDOWS_DEFAULT.exists():
         return str(WINDOWS_DEFAULT)
     raise CommandError('mysqldump پیدا نشد. مسیر آن را در MYSQLDUMP_PATH در فایل .env بنویسید.')
+
+
+def is_mariadb_client(dump):
+    version = subprocess.run([dump, '--version'], capture_output=True, text=True, errors='replace')
+    return 'mariadb' in (version.stdout + version.stderr).lower()
 
 
 class Command(BaseCommand):
@@ -75,11 +80,14 @@ class Command(BaseCommand):
             cnf.write(f'password="{db["PASSWORD"]}"\n')
             cnf.write(f'host="{db.get("HOST") or "127.0.0.1"}"\n')
             cnf.write(f'port={db.get("PORT") or 3306}\n')
+        dump = find_mysqldump()
         command = [
-            find_mysqldump(), f'--defaults-extra-file={cnf.name}',
+            dump, f'--defaults-extra-file={cnf.name}',
             '--single-transaction', '--quick', '--no-tablespaces', '--hex-blob', '--triggers',
-            '--default-character-set=utf8mb4', '--set-gtid-purged=OFF', db['NAME'],
+            '--default-character-set=utf8mb4', db['NAME'],
         ]
+        if not is_mariadb_client(dump):  # the Linux image ships MariaDB's mysqldump, without this option
+            command.insert(-1, '--set-gtid-purged=OFF')
         raw_bytes, tail = 0, b''
         try:
             with tempfile.TemporaryFile() as stderr, gzip.open(partial, 'wb') as gz:

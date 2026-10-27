@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { FileSpreadsheet, FileText, Pencil, Plus, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 
 import { TodayRateDialog } from '@/components/finance/TodayRateDialog';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -83,8 +83,12 @@ export function TransactionsList(): JSX.Element {
 
   const urlSearch = params.get('search') ?? '';
   useEffect(() => {
-    if (debouncedSearch !== urlSearch) setFilter('search', debouncedSearch);
-  }, [debouncedSearch, urlSearch, setFilter]);
+    // Only a settled value: right after «clear filters» the debounced one is still the old text
+    // and would put it back into the URL for 300 ms (and fetch with it).
+    if (debouncedSearch === searchText && debouncedSearch !== urlSearch) {
+      setFilter('search', debouncedSearch);
+    }
+  }, [debouncedSearch, searchText, urlSearch, setFilter]);
 
   // A just-saved row stays highlighted for 3 seconds, then the param goes away.
   useEffect(() => {

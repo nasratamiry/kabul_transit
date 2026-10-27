@@ -1,0 +1,28 @@
+# Plain VPS: Caddy in front of nginx — ports 80/443, automatic Let's Encrypt certificate and
+# renewal, HTTP → HTTPS. Needs DOMAIN (and LETSENCRYPT_EMAIL) in .env and the domain's DNS
+# A record pointing at this server.
+#   docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d --build
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN is required}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      nginx: { condition: service_healthy }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+volumes:
+  caddy-data:
+  caddy-config:

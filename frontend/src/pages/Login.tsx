@@ -4,7 +4,7 @@ import { Lock, User } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { Navigate, useLocation, useNavigate, type Location } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, type Location } from 'react-router';
 import { z } from 'zod';
 
 import { LanguageSwitcher } from '@/components/layout/LanguageSwitcher';

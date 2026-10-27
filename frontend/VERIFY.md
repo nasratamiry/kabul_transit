@@ -1,3 +1,22 @@
+# Running everything at once (stage 15)
+
+```powershell
+cd "D:\Kabul Cargo TN"
+scripts\run_all_checks.ps1              # or: scripts/run_all_checks.sh
+scripts\run_all_checks.ps1 --skip-e2e   # backend scripts + typecheck / lint / build only
+scripts\run_all_checks.ps1 --only e2e-stage10 e2e-stage11
+```
+
+Runs the six backend verify scripts, typecheck, lint, build, and every E2E suite below with its
+own setup and cleanup. Django and Vite are started on ports 8010 / 5183 (not 8000 / 5173, so a
+developer's servers are left alone) and are always stopped at the end, process tree included.
+Logs, screenshots and `summary.md` go to `checks-output/`. Stage 9 runs last (it locks the test
+user and the IP; its cleanup lifts that). The sections below are the manual way, one suite at a time.
+
+`frontend/scripts/verify-prod.mjs` is only for the Docker stack (`scripts/prod_local_test.ps1`).
+
+---
+
 # Stage 9 — verification checklist
 
 Run against the **live** stack. Everything below was run for Stage 9 (results in `STAGE_9_COMPLETE.md`).

@@ -3,7 +3,7 @@ import { CalendarDays, Pencil, Printer, ShieldAlert, Trash2, Building2 } from 'l
 import { useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
 
 import { DocumentsPanel } from '@/components/transactions/DocumentsPanel';
 import { Badge } from '@/components/ui/Badge';

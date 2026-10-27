@@ -1,0 +1,19 @@
+# Backend image (Dockerfile). The nginx image has its own list: deploy/nginx/Dockerfile.dockerignore
+.git
+.venv
+**/__pycache__
+**/*.pyc
+.env
+.env.*
+!.env.production.example
+frontend
+media
+logs
+backups
+staticfiles
+checks-output
+stage*_screenshots
+graphify-out
+docs
+.claude
+.vscode

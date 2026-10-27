@@ -158,6 +158,15 @@ try:
               denied.status_code == 403 and created.status_code == 201 and created.data['code'] == 'ZZHIR',
               f'manager={denied.status_code}, admin={created.status_code}')
 
+        branch_url = f"/api/branches/{created.data['id']}/"
+        renamed = admin_client.patch(branch_url, {'code': 'ZZNEW'}, format='json')
+        same = admin_client.patch(branch_url, {'code': 'ZZHIR', 'name': 'بندر آزمایشی API هرات ۲'}, format='json')
+        put = admin_client.put(branch_url, {'name': 'بندر آزمایشی API هرات ۳', 'code': 'ZZPUT'}, format='json')
+        check('کود بندر تغییرناپذیر است: PATCH / PUT با کود تازه ۴۰۰ (دری)؛ همان کود + نام تازه ۲۰۰',
+              renamed.status_code == 400 and 'code' in renamed.data and put.status_code == 400
+              and same.status_code == 200 and Branch.objects.get(pk=created.data['id']).code == 'ZZHIR',
+              f'patch={renamed.status_code} same={same.status_code} put={put.status_code}')
+
         field_config = FieldConfig.objects.filter(branch=branch_a, trade_type='EXPORT').first()
         denied = client_a.patch(f'/api/field-configs/{field_config.id}/', {'sort_order': 1}, format='json')
         allowed = admin_client.patch(f'/api/field-configs/{field_config.id}/', {'sort_order': 1}, format='json')
@@ -646,6 +655,15 @@ try:
         check('حذف سند فایل آن را هم از دیسک پاک می‌کند (بعد از commit)',
               on_disk and deleted.status_code == 204 and not default_storage.exists(gone_doc.file.name),
               f'before={on_disk}, status={deleted.status_code}, after={default_storage.exists(gone_doc.file.name)}')
+
+        anonymous = APIClient(HTTP_HOST='127.0.0.1', REMOTE_ADDR='10.9.9.9')
+        probes = [anonymous.get('/api/health/') for _ in range(25)]  # more than the anon throttle (20/min)
+        body = probes[-1].json()
+        check('GET /api/health/ بدون ورود ۲۰۰، throttle نمی‌شود، فقط status و checks (بدون نسخه یا خطا)',
+              all(r.status_code == 200 for r in probes) and set(body) == {'status', 'checks'}
+              and body == {'status': 'ok', 'checks': {'database': True, 'cache': True}}
+              and 'no-store' in probes[-1]['Cache-Control'],
+              f'statuses={sorted({r.status_code for r in probes})} body={body}')
 
         raise Rollback
 except Rollback:

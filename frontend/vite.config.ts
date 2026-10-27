@@ -2,6 +2,10 @@ import path from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
+// Django dev server behind the /api proxy. scripts/run_all_checks overrides it so the checks run
+// on their own ports, next to a developer's servers on :8000 / :5173.
+const apiTarget = process.env.KC_API_TARGET ?? 'http://127.0.0.1:8000';
+
 export default defineConfig({
   plugins: [react()],
   resolve: { alias: { '@': path.resolve(import.meta.dirname, 'src') } },
@@ -13,7 +17,7 @@ export default defineConfig({
           groups: [
             {
               name: 'react',
-              test: /node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/,
+              test: /node_modules[\\/](react|react-dom|react-router|cookie|set-cookie-parser|scheduler)[\\/]/,
             },
             { name: 'date', test: /node_modules[\\/](jalali-moment|moment)[\\/]/ },
             // Only the dashboard chart needs these; fetched lazily with it.
@@ -33,8 +37,8 @@ export default defineConfig({
     // answer every OPTIONS request itself (204, empty), hiding DRF's field/choice metadata.
     cors: false,
     proxy: {
-      '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
-      '/media': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+      '/api': { target: apiTarget, changeOrigin: true },
+      '/media': { target: apiTarget, changeOrigin: true },
     },
   },
 });

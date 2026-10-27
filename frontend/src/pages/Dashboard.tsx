@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, Building2, CalendarDays, Minus } from 'lucide-react';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 
 import { AdminOverview } from '@/components/admin/AdminOverview';
 import { TodayRateBanner } from '@/components/admin/TodayRateBanner';

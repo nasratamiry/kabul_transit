@@ -4,7 +4,7 @@ import { History, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useForm, useWatch } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useMatch, useNavigate, useSearchParams } from 'react-router';
 import { z } from 'zod';
 
 import {
@@ -78,7 +78,9 @@ export function OfficeExpensesPage(): JSX.Element {
     placeholderData: (prev) => prev,
   });
   const remove = useDelete((id) => `${ENDPOINT}${id}/`, [[...OFFICE_KEY]], { success: false });
-  const goList = (): void => navigate(`${BASE}${search}`);
+  const goList = (): void => {
+    void navigate(`${BASE}${search}`);
+  };
   const totals = list.data?.totals;
   const category = (c: string): string => t(`office_expenses.categories.${c}`);
 

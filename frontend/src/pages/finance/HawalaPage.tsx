@@ -4,7 +4,7 @@ import { History, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useForm, useWatch } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useMatch, useNavigate, useSearchParams } from 'react-router';
 import { z } from 'zod';
 
 import {
@@ -76,7 +76,9 @@ export function HawalaPage(): JSX.Element {
     placeholderData: (prev) => prev,
   });
   const remove = useDelete((id) => `${ENDPOINT}${id}/`, [[...HAWALA_KEY]], { success: false });
-  const goList = (): void => navigate(`${BASE}${search}`);
+  const goList = (): void => {
+    void navigate(`${BASE}${search}`);
+  };
   const totals = list.data?.totals;
 
   async function onDelete(row: Hawala): Promise<void> {

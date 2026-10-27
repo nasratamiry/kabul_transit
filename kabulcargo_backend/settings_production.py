@@ -5,13 +5,15 @@ Production settings. Use with:
 Everything below is mandatory in production and does not depend on .env's
 DEBUG value. Required in the environment / .env: SECRET_KEY (50+ chars),
 ALLOWED_HOSTS, CORS_ALLOWED_ORIGINS, DB_*. Optional: TRUSTED_PROXY_COUNT
-(1 behind nginx), CSRF_TRUSTED_ORIGINS, REDIS_URL.
+(1 behind nginx; 2 in docker-compose: TLS proxy → nginx), CSRF_TRUSTED_ORIGINS, REDIS_URL
+(required by docker-compose.yml). KC_LOCAL_HTTP_TEST is for a local test of the Docker stack
+only and is refused for any real host name.
 """
 from decouple import Csv, config
 from django.core.exceptions import ImproperlyConfigured
 
 from .settings import *  # noqa: F401,F403
-from .settings import REST_FRAMEWORK, SECRET_KEY
+from .settings import LOGGING, REST_FRAMEWORK, SECRET_KEY
 
 DEBUG = False
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=Csv())
@@ -40,12 +42,25 @@ X_FRAME_OPTIONS = 'DENY'
 SECURE_REFERRER_POLICY = 'same-origin'
 CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
 
+# Local test of the production stack over plain HTTP (docker compose on a developer machine,
+# no certificate). Only for localhost: with any real domain in ALLOWED_HOSTS the server refuses
+# to start, so the flag cannot stay switched on in a real deployment.
+LOCAL_HTTP_TEST = config('KC_LOCAL_HTTP_TEST', default=False, cast=bool)
+if LOCAL_HTTP_TEST:
+    if set(ALLOWED_HOSTS) - {'localhost', '127.0.0.1'}:
+        raise ImproperlyConfigured('KC_LOCAL_HTTP_TEST is only for a local test (ALLOWED_HOSTS=localhost,127.0.0.1). '
+                                   'Remove it in a real deployment.')
+    SECURE_SSL_REDIRECT = False
+    SECURE_HSTS_SECONDS = 0
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_HSTS_PRELOAD = False
+    SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = False
+
 # Strict CORS: only the listed frontend origins.
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', cast=Csv())
 CORS_ALLOW_ALL_ORIGINS = False
 
 # Document files: Django checks login + branch, nginx sends the bytes from an `internal`
-# location (deploy/nginx-documents.conf). /media/ itself must not be public in production.
+# location (deploy/nginx/default.conf). /media/ itself must not be public in production.
 DOCUMENT_X_ACCEL_PREFIX = config('DOCUMENT_X_ACCEL_PREFIX', default='/protected-media')
 
 # The browsable API is a developer tool; production serves JSON only.
@@ -61,3 +76,15 @@ if REDIS_URL:
     CACHES = {'default': {'BACKEND': 'django.core.cache.backends.redis.RedisCache', 'LOCATION': REDIS_URL}}
 else:
     CACHES = {'default': {'BACKEND': 'django.core.cache.backends.db.DatabaseCache', 'LOCATION': 'kabulcargo_cache'}}
+
+# Errors, warnings and the security events also go to stdout/stderr, where docker collects and
+# rotates them. (logs/security.log stays as well; with several gunicorn workers its own size-based
+# rotation is per process, so the docker log is the complete copy.)
+LOGGING = {
+    **LOGGING,
+    'handlers': {**LOGGING['handlers'], 'console': {'class': 'logging.StreamHandler', 'formatter': 'security'}},
+    'loggers': {
+        **{name: {**logger, 'handlers': [*logger['handlers'], 'console']} for name, logger in LOGGING['loggers'].items()},
+        'django': {'handlers': ['console'], 'level': 'WARNING'},
+    },
+}

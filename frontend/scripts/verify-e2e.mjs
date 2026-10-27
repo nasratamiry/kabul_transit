@@ -84,8 +84,16 @@ check(
   page.url(),
 );
 
-// 4/5. Dashboard content + /auth/me/ badge
-await page.waitForSelector('[data-testid=backend-status][data-state=ok]', { timeout: 10000 });
+// 4/5. Dashboard content + /auth/me/ (stage 14 replaced the dashboard's status badge)
+await page.waitForSelector('[data-testid=greeting]', { timeout: 10000 });
+const meStatus = await page.evaluate(
+  async () =>
+    (
+      await fetch('/api/auth/me/', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('kc.access')}` },
+      })
+    ).status,
+);
 const admin = await storedUser();
 const greeting = await page.textContent('[data-testid=greeting]');
 const role = await page.textContent('[data-testid=role-badge]');
@@ -104,11 +112,7 @@ check(
     greg,
   JSON.stringify({ greeting, role, branch, shamsi, greg }),
 );
-check(
-  '5. /api/auth/me/ → 200 (green badge)',
-  true,
-  await page.textContent('[data-testid=backend-status]'),
-);
+check('5. /api/auth/me/ → 200', meStatus === 200, `status=${meStatus}`);
 check('   super_admin sees "مدیریت" section', adminNav);
 await page.screenshot({ path: `${SHOTS}/02-dashboard-fa-super-admin.png` });
 
@@ -153,7 +157,7 @@ await page.selectOption('header select', 'fa');
 
 // 8. Reload → still logged in, language kept
 await page.reload();
-await page.waitForSelector('[data-testid=backend-status][data-state=ok]');
+await page.waitForSelector('[data-testid=greeting]');
 a = await htmlAttr();
 check(
   '8. Reload → still logged in (localStorage)',
@@ -166,7 +170,7 @@ let refreshCalls = 0;
 page.on('request', (r) => r.url().includes('/api/auth/refresh/') && refreshCalls++);
 await page.evaluate(() => localStorage.setItem('kc.access', 'broken.token.value'));
 await page.reload();
-await page.waitForSelector('[data-testid=backend-status][data-state=ok]', { timeout: 10000 });
+await page.waitForSelector('[data-testid=greeting]', { timeout: 10000 });
 check(
   '   Expired access → refresh → retry succeeds',
   refreshCalls === 1,
@@ -266,7 +270,7 @@ await page.waitForSelector('[data-testid=theme-toggle]');
 await page.click('[data-testid=theme-toggle]');
 a = await htmlAttr();
 await page.reload();
-await page.waitForSelector('[data-testid=backend-status][data-state=ok]');
+await page.waitForSelector('[data-testid=greeting]');
 const afterReload = await htmlAttr();
 check(
   '12. Dark mode toggles and persists',
@@ -300,7 +304,7 @@ check(
 // 11. branch_manager → no "مدیریت"
 await login(...MANAGER);
 await page.waitForURL('**/dashboard');
-await page.waitForSelector('[data-testid=backend-status][data-state=ok]');
+await page.waitForSelector('[data-testid=greeting]');
 const manager = await storedUser();
 const mAdmin = await page.isVisible('[data-testid=nav-admin]');
 const mBranch = await page.textContent('[data-testid=branch]');
