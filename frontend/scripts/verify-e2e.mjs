@@ -169,8 +169,14 @@ check(
 let refreshCalls = 0;
 page.on('request', (r) => r.url().includes('/api/auth/refresh/') && refreshCalls++);
 await page.evaluate(() => localStorage.setItem('kc.access', 'broken.token.value'));
+// The greeting renders from the stored user at once; the refresh follows the first 401.
+const refreshed = page
+  .waitForResponse((r) => r.url().includes('/api/auth/refresh/'), { timeout: 10000 })
+  .catch(() => null);
 await page.reload();
 await page.waitForSelector('[data-testid=greeting]', { timeout: 10000 });
+await refreshed;
+await page.waitForLoadState('networkidle');
 check(
   '   Expired access → refresh → retry succeeds',
   refreshCalls === 1,
