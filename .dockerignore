@@ -1,19 +1,38 @@
-# Backend image (Dockerfile). The nginx image has its own list: deploy/nginx/Dockerfile.dockerignore
-.git
-.venv
-**/__pycache__
-**/*.pyc
+# Backend image (Dockerfile): Python runtime code only. The nginx and MySQL images have their own
+# lists: deploy/nginx/Dockerfile.dockerignore, deploy/mysql/Dockerfile.dockerignore.
+# Secrets and local data
 .env
 .env.*
-!.env.production.example
-frontend
 media
 logs
 backups
 staticfiles
+*.sqlite3
+# Version control, tooling, local-only folders
+.git
+.github
+.gitignore
+.gitattributes
+.venv
+**/__pycache__
+**/*.pyc
+.claude
+.cursor
+.vscode
+_local
+graphify-out
 checks-output
 stage*_screenshots
-graphify-out
+# Not needed to run the backend: frontend (its own image), tests, docs, other deploy targets
+frontend
+scripts
 docs
-.claude
-.vscode
+**/*.md
+requirements-dev.txt
+docker-compose*.yml
+Dockerfile
+deploy/nginx
+deploy/caddy
+deploy/mysql
+deploy/offsite-backup.sh
+deploy/mysql_timezones_windows.sql

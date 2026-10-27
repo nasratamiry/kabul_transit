@@ -1,13 +1,14 @@
-# Plain VPS: Caddy in front of nginx — ports 80/443, automatic Let's Encrypt certificate and
-# renewal, HTTP → HTTPS. Needs DOMAIN (and LETSENCRYPT_EMAIL) in .env and the domain's DNS
-# A record pointing at this server.
+# Plain VPS only (NOT for Coolify — there, Coolify's proxy and a Scheduled Task do these jobs).
+# Adds Caddy in front of nginx — ports 80/443, automatic Let's Encrypt certificate and renewal,
+# HTTP → HTTPS — and the daily backup service. Needs APP_DOMAIN (and LETSENCRYPT_EMAIL) in .env
+# and the domain's DNS A record pointing at this server.
 #   docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d --build
 services:
-  caddy:
+  kabulcargo_caddy:
     image: caddy:2.10-alpine
     restart: unless-stopped
     environment:
-      DOMAIN: ${DOMAIN:?DOMAIN is required}
+      DOMAIN: ${APP_DOMAIN:?APP_DOMAIN is required}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-}
     ports:
       - "80:80"
@@ -15,14 +16,51 @@ services:
       - "443:443/udp"
     volumes:
       - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
+      - kabulcargo_caddy_data:/data
+      - kabulcargo_caddy_config:/config
+    networks: [kabulcargo_net]
+    mem_limit: 128m
     depends_on:
-      nginx: { condition: service_healthy }
+      kabulcargo_web: { condition: service_healthy }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  # python manage.py backup_db every day at BACKUP_HOUR (Kabul time), keeping BACKUP_KEEP_DAYS.
+  kabulcargo_backup:
+    image: kabulcargo-backend:latest
+    pull_policy: never   # the image the backend service builds
+    restart: unless-stopped
+    entrypoint: ["/app/deploy/docker/backup-loop.sh"]
+    environment:
+      DJANGO_SETTINGS_MODULE: kabulcargo_backend.settings_production
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      ALLOWED_HOSTS: ${APP_DOMAIN:?APP_DOMAIN is required}
+      CORS_ALLOWED_ORIGINS: https://${APP_DOMAIN}
+      ADMIN_URL: ${ADMIN_URL:?ADMIN_URL is required}
+      DB_NAME: ${DB_NAME:-kabulcargo}
+      DB_USER: ${DB_USER:-kabulcargo}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      DB_HOST: kabulcargo_db
+      DB_PORT: "3306"
+      REDIS_URL: redis://kabulcargo_redis:6379/0
+      BACKUP_HOUR: ${BACKUP_HOUR:-2}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
+      KC_LOCAL_HTTP_TEST: ${KC_LOCAL_HTTP_TEST:-false}
+    depends_on:
+      kabulcargo_backend: { condition: service_healthy }
+    volumes:
+      - kabulcargo_backups:/app/backups
+      - kabulcargo_logs:/app/logs
+      - kabulcargo_media:/app/media:ro
+    networks: [kabulcargo_net]
+    mem_limit: 384m
+    healthcheck:
+      disable: true
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "5" }
 
 volumes:
-  caddy-data:
-  caddy-config:
+  kabulcargo_caddy_data:
+  kabulcargo_caddy_config:

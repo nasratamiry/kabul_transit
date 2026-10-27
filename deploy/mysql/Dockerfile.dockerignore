@@ -1,0 +1,3 @@
+# Only the first-start scripts go into the database image.
+*
+!deploy/mysql/init

@@ -1,7 +1,8 @@
 #!/bin/sh
 # Kabul Cargo — copy backups OFF the server (host cron job; docker-compose and Coolify alike).
 #
-# The backup service keeps 30 days of database dumps inside the server. A dead disk or a lost
+# The daily backup (Coolify Scheduled Task, or the backup service on a plain VPS) keeps 30 days
+# of database dumps inside the server. A dead disk or a lost
 # server takes those with it, so once a day this copies them, and the uploaded documents, to
 #   1. OFFSITE_LOCAL_DIR on the host (default /var/backups/kabulcargo), then
 #   2. OFFSITE_RCLONE_REMOTE, if set: any rclone remote — Backblaze B2, Google Drive, S3,
@@ -20,8 +21,8 @@ container() {  # the running container of a compose service (any project name: w
 }
 
 mkdir -p "$LOCAL/db" "$LOCAL/media"
-docker cp "$(container backup):/app/backups/." "$LOCAL/db/"
-docker cp "$(container backend):/app/media/." "$LOCAL/media/"
+docker cp "$(container kabulcargo_backend):/app/backups/." "$LOCAL/db/"
+docker cp "$(container kabulcargo_backend):/app/media/." "$LOCAL/media/"
 find "$LOCAL/db" -name 'kabulcargo-*.sql.gz' -mtime "+$KEEP_DAYS" -delete
 latest=$(ls -1 "$LOCAL/db" | grep -E '^kabulcargo-.*\.sql\.gz$' | tail -n 1)
 echo "$(date -Is) local copy ok: latest=$latest, media=$(du -sh "$LOCAL/media" | cut -f1)"

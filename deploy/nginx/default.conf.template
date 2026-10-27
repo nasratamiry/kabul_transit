@@ -1,5 +1,10 @@
-# Kabul Cargo — nginx inside docker-compose. TLS ends one step earlier (Caddy on a plain VPS,
-# Traefik on Coolify); that proxy sends X-Forwarded-Proto, which is passed on to Django.
+# Kabul Cargo — nginx inside docker-compose. TLS ends one step earlier (Coolify's proxy, or Caddy
+# on a plain VPS); that proxy sends X-Forwarded-Proto, which is passed on to Django.
+#
+# A template: at start the nginx image writes it to /etc/nginx/conf.d/default.conf, replacing
+# ${ADMIN_URL} (the Django admin's secret path, e.g. kc-panel-7f3a/) from the environment. Only
+# that one variable is replaced (NGINX_ENVSUBST_FILTER in the Dockerfile); nginx's own $variables
+# are left alone.
 
 map $http_x_forwarded_proto $kc_proto {
     default $http_x_forwarded_proto;
@@ -11,7 +16,7 @@ map $kc_proto $kc_hsts {
 }
 
 upstream django {
-    server backend:8000;
+    server kabulcargo_backend:8000;
     keepalive 16;
 }
 
@@ -36,9 +41,10 @@ server {
         return 200 "ok\n";
     }
 
-    # Django: API and admin panel (Django sets its own security headers there).
-    location /api/   { include /etc/nginx/snippets/proxy-django.conf; }
-    location /admin/ { include /etc/nginx/snippets/proxy-django.conf; }
+    # Django: API and admin panel (Django sets its own security headers there). The admin lives
+    # at a secret path, never /admin/: /admin/... are the React app's own super-admin pages.
+    location /api/          { include /etc/nginx/snippets/proxy-django.conf; }
+    location /${ADMIN_URL} { include /etc/nginx/snippets/proxy-django.conf; }
 
     # Django's collected static files (admin panel), copied to the shared volume at backend start.
     location /static/ {

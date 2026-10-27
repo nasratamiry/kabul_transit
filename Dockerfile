@@ -1,13 +1,15 @@
 # syntax=docker/dockerfile:1
 # Kabul Cargo backend: Django + gunicorn, non-root, static files collected at build time.
+# The runtime image holds Python code and production packages only: no compiler, no tests,
+# no docs, no frontend (see .dockerignore).
 
 # ---- build: compile the wheels (mysqlclient needs a compiler and the client headers)
 FROM python:3.12-slim-bookworm AS build
 RUN apt-get update \
  && apt-get install -y --no-install-recommends build-essential pkg-config default-libmysqlclient-dev \
  && rm -rf /var/lib/apt/lists/*
-COPY requirements.txt requirements-production.txt /tmp/
-RUN pip wheel --no-cache-dir --wheel-dir /wheels -r /tmp/requirements-production.txt
+COPY requirements.txt /tmp/
+RUN pip wheel --no-cache-dir --wheel-dir /wheels -r /tmp/requirements.txt
 
 # ---- runtime
 FROM python:3.12-slim-bookworm

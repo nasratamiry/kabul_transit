@@ -1,7 +1,10 @@
-# Only the frontend sources and the nginx config go into the nginx image.
+# Only the frontend sources and the nginx config go into the nginx image build.
 *
 !frontend
 !deploy/nginx
 frontend/node_modules
 frontend/dist
 frontend/scripts
+frontend/*.md
+# A developer's local Vite settings never reach a production build (the defaults are right).
+frontend/.env*

@@ -1,0 +1,46 @@
+# Production stack test on GitHub's Linux machines: builds the three images, starts the same
+# docker-compose.yml Coolify deploys (plus the local-test override), and runs
+# scripts/prod_stack_test.sh — first run, security headers, documents only via the authenticated
+# download, health, Redis throttling, the Kabul day, 20 users × 2 minutes with memory, backup +
+# restore drill, and what is inside the images. Nothing here touches the real server.
+# Run it by hand: GitHub → Actions → "Production stack test" → Run workflow.
+name: Production stack test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Test tools (playwright-core for verify-prod.mjs)
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Production stack test
+        env:
+          KC_BROWSER: /usr/bin/google-chrome
+          PYTHON: python3
+        run: bash scripts/prod_stack_test.sh
+
+      - name: Summary
+        if: always()
+        run: cat checks-output/prod-stack/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-stack-results
+          path: checks-output/prod-stack/
+          retention-days: 14

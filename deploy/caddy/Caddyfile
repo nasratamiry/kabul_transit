@@ -4,5 +4,5 @@
 
 {$DOMAIN} {
 	encode zstd gzip
-	reverse_proxy nginx:80
+	reverse_proxy kabulcargo_web:80
 }
