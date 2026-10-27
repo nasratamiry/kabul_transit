@@ -102,6 +102,45 @@ def _transaction_amounts(fields, period, branch_id, usd_rates):
     return totals, count
 
 
+def _record_afn_usd(record, amount, usd_rates):
+    """
+    One hawala / office-expense amount → ((AFN, USD), rate used). AFN at the record's snapshot
+    rate (rate_used), else the latest rate on or before its date; USD at the USD rate of its
+    date. Shared by the income statement and the hawala / office-expense list totals, so the
+    two always agree.
+    """
+    rate = record.rate_used or (None if record.currency == AFN else _fallback_rate(record.date, record.currency))
+    return _convert(amount, record.currency, rate, record.date, usd_rates), rate
+
+
+def amount_totals(records, field='amount', group_by=None):
+    """
+    Totals of `field` over hawala / office-expense records (e.g. a filtered list):
+    {by_currency: {currency: amount}, afn, usd, groups: {key: {afn, usd}}, unconverted}.
+    afn / usd are None when some record's rate is unknown (never a wrong number);
+    `unconverted` counts those records.
+    """
+    records = list(records)
+    by_currency, groups, total, unconverted = {}, {}, _Amount(), 0
+    usd_rates = UsdRateTable(until=max(r.date for r in records)) if records else None
+    for record in records:
+        amount = getattr(record, field) or Decimal('0')
+        by_currency[record.currency] = by_currency.get(record.currency, Decimal('0')) + amount
+        (afn, usd), rate = _record_afn_usd(record, amount, usd_rates)
+        if record.currency != AFN and rate is None:
+            unconverted += 1
+        total.add(afn, usd)
+        if group_by:
+            groups.setdefault(getattr(record, group_by), _Amount()).add(afn, usd)
+    return {
+        'by_currency': {currency: _money(value) for currency, value in sorted(by_currency.items())},
+        'afn': _money(total.afn),
+        'usd': _money(total.usd),
+        'groups': {key: {'afn': _money(a.afn), 'usd': _money(a.usd)} for key, a in sorted(groups.items())},
+        'unconverted': unconverted,
+    }
+
+
 def _special_amounts(sources, period, branch_id, usd_rates, warnings):
     """Office expenses (salary / everything else) and hawala fees, each converted at its own snapshot rate."""
     totals = {source: _Amount() for source in sources}
@@ -112,9 +151,8 @@ def _special_amounts(sources, period, branch_id, usd_rates, warnings):
         for expense in expenses:
             source = '@office_salary' if expense.category == OfficeExpense.Category.SALARY else '@office_expense'
             if source in totals:
-                rate = expense.rate_used or (None if expense.currency == AFN
-                                             else _fallback_rate(expense.date, expense.currency))
-                totals[source].add(*_convert(expense.amount, expense.currency, rate, expense.date, usd_rates))
+                converted, rate = _record_afn_usd(expense, expense.amount, usd_rates)
+                totals[source].add(*converted)
                 if expense.currency != AFN and rate is None:
                     warnings.append(f'مصرف دفتر شماره {expense.pk}: نرخ {expense.currency} برای {expense.date} نیست.')
     if '@hawala_fee' in sources:
@@ -122,9 +160,8 @@ def _special_amounts(sources, period, branch_id, usd_rates, warnings):
         if branch_id:
             hawalas = hawalas.filter(branch_id=branch_id)
         for hawala in hawalas:
-            rate = hawala.rate_used or (None if hawala.currency == AFN
-                                        else _fallback_rate(hawala.date, hawala.currency))
-            totals['@hawala_fee'].add(*_convert(hawala.fee, hawala.currency, rate, hawala.date, usd_rates))
+            converted, rate = _record_afn_usd(hawala, hawala.fee, usd_rates)
+            totals['@hawala_fee'].add(*converted)
             if hawala.currency != AFN and rate is None:
                 warnings.append(f'حوالهٔ شماره {hawala.pk}: نرخ {hawala.currency} برای {hawala.date} نیست.')
     return totals

@@ -5,6 +5,7 @@ import {
   FileBarChart,
   LayoutDashboard,
   ListOrdered,
+  Send,
   type LucideIcon,
   SlidersHorizontal,
   Users,
@@ -29,8 +30,13 @@ interface NavItem {
 const MAIN: NavItem[] = [
   { label: 'nav.dashboard', icon: LayoutDashboard, to: '/dashboard' },
   { label: 'nav.transactions', icon: ArrowLeftRight, to: '/transactions' },
-  { label: 'nav.finance', icon: Wallet },
   { label: 'nav.income_statement', icon: FileBarChart },
+];
+
+// Both roles; the API limits a branch manager to their own branch.
+const FINANCE: NavItem[] = [
+  { label: 'nav.hawala', icon: Send, to: '/finance/hawala' },
+  { label: 'nav.office_expenses', icon: Wallet, to: '/finance/office-expenses' },
 ];
 
 // Company-wide data: both roles read and edit it.
@@ -89,6 +95,12 @@ export function Sidebar({ open, onClose }: SidebarProps): JSX.Element {
         </div>
         <nav className="flex-1 space-y-6 overflow-y-auto p-3 lg:pt-5">
           <NavGroup items={MAIN} onNavigate={onClose} />
+          <div data-testid="nav-finance">
+            <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              {t('nav.finance')}
+            </p>
+            <NavGroup items={FINANCE} onNavigate={onClose} />
+          </div>
           <div data-testid="nav-partners">
             <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
               {t('nav.partners')}

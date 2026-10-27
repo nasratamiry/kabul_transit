@@ -5,9 +5,11 @@ from rest_framework.exceptions import PermissionDenied
 from api.filters import ShamsiDateFilter
 from api.history import HistoryMixin
 from api.mixins import PortScopedQuerysetMixin, own_branch_kwargs
+from api.pagination import StandardPagination
 from api.permissions import IsBranchStaff, IsSuperAdmin
 from api.serializers import ExchangeRateSerializer, HawalaSerializer, OfficeExpenseSerializer
 from finance.models import ExchangeRate, Hawala, OfficeExpense
+from finance.reports import amount_totals
 from finance.utils import kabul_today, require_todays_usd_rate
 
 
@@ -21,6 +23,8 @@ class ExchangeRateFilter(FilterSet):
 
 class HawalaFilter(FilterSet):
     date = ShamsiDateFilter(field_name='date')
+    date_from = ShamsiDateFilter(field_name='date', lookup_expr='gte')
+    date_to = ShamsiDateFilter(field_name='date', lookup_expr='lte')
 
     class Meta:
         model = Hawala
@@ -29,6 +33,8 @@ class HawalaFilter(FilterSet):
 
 class OfficeExpenseFilter(FilterSet):
     date = ShamsiDateFilter(field_name='date')
+    date_from = ShamsiDateFilter(field_name='date', lookup_expr='gte')
+    date_to = ShamsiDateFilter(field_name='date', lookup_expr='lte')
 
     class Meta:
         model = OfficeExpense
@@ -61,10 +67,28 @@ class ExchangeRateViewSet(viewsets.ModelViewSet):
         serializer.save(created_by=user)
 
 
-class HawalaViewSet(HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelViewSet):
+class TotalsListMixin:
+    """
+    Paged list plus `totals` for the whole filtered set (not just the page), computed with the
+    income statement's own conversion (finance.reports.amount_totals) so the two always agree.
+    """
+    pagination_class = StandardPagination
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        response.data['totals'] = self.totals(self.filter_queryset(self.get_queryset()))
+        return response
+
+
+class HawalaViewSet(TotalsListMixin, HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelViewSet):
+    """The hawala amount is money moved, not an expense; only `fee` is an expense (OPEX_HAWALA_FEE)."""
     queryset = Hawala.objects.select_related('branch', 'created_by')
     serializer_class = HawalaSerializer
     permission_classes = [IsBranchStaff]
+
+    def totals(self, queryset):
+        records = list(queryset)
+        return {'amount': amount_totals(records, 'amount'), 'fee': amount_totals(records, 'fee')}
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = HawalaFilter
     search_fields = ['from_party', 'to_party', 'note']
@@ -79,10 +103,20 @@ class HawalaViewSet(HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelViewSet
         serializer.save(**own_branch_kwargs(self.request.user))
 
 
-class OfficeExpenseViewSet(HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelViewSet):
+class OfficeExpenseViewSet(TotalsListMixin, HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = OfficeExpense.objects.select_related('branch', 'created_by')
     serializer_class = OfficeExpenseSerializer
     permission_classes = [IsBranchStaff]
+
+    def totals(self, queryset):
+        """All, per category, and the income statement's split: salary vs everything else."""
+        records = list(queryset)
+        salary = [r for r in records if r.category == OfficeExpense.Category.SALARY]
+        others = [r for r in records if r.category != OfficeExpense.Category.SALARY]
+        result = amount_totals(records, 'amount', group_by='category')
+        result['salary'] = amount_totals(salary, 'amount')
+        result['non_salary'] = amount_totals(others, 'amount')
+        return result
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = OfficeExpenseFilter
     search_fields = ['person', 'bill_number', 'description']

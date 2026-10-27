@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from finance.models import ExchangeRate, Hawala, OfficeExpense, StatementLine, statement_source_choices
@@ -13,14 +15,31 @@ class ExchangeRateSerializer(KabulModelSerializer):
 
 
 class HawalaSerializer(KabulModelSerializer):
+    """`rate_used` is a snapshot taken at save time: later rate changes never alter this record."""
+    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True, default=None)
+    amount_afn = serializers.SerializerMethodField(label='معادل افغانی مبلغ')
+    fee_afn = serializers.SerializerMethodField(label='معادل افغانی مصرف')
+
     class Meta:
         model = Hawala
         fields = '__all__'
         read_only_fields = ('rate_used', 'created_by', 'created_at', 'updated_at')
 
+    def _afn(self, obj, value):
+        if obj.currency == 'AFN':
+            return str(value)
+        return None if obj.rate_used is None else str((value * obj.rate_used).quantize(Decimal('0.01')))
+
+    def get_amount_afn(self, obj):
+        return self._afn(obj, obj.amount)
+
+    def get_fee_afn(self, obj):
+        return self._afn(obj, obj.fee)
+
 
 class OfficeExpenseSerializer(KabulModelSerializer):
     amount_afn = serializers.SerializerMethodField(label='معادل افغانی')
+    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True, default=None)
 
     class Meta:
         model = OfficeExpense

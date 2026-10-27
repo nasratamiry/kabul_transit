@@ -6,6 +6,8 @@ import { ExchangeRates } from '@/pages/admin/ExchangeRates';
 import { StatementLines } from '@/pages/admin/StatementLines';
 import { Users } from '@/pages/admin/Users';
 import { Dashboard } from '@/pages/Dashboard';
+import { HawalaPage } from '@/pages/finance/HawalaPage';
+import { OfficeExpensesPage } from '@/pages/finance/OfficeExpensesPage';
 import { Login } from '@/pages/Login';
 import { Traders } from '@/pages/partners/Traders';
 import { TransportCompanies } from '@/pages/partners/TransportCompanies';
@@ -61,6 +63,33 @@ export const router = createBrowserRouter([
           },
           { path: ':id', element: <TransactionDetail />, handle: crumb('detail.crumb') },
           { path: ':id/edit', element: <TransactionForm />, handle: crumb('common.edit') },
+        ],
+      },
+      {
+        // Both roles; a branch manager only ever sees their own branch (API queryset).
+        path: 'finance',
+        handle: crumb('nav.finance', false),
+        children: [
+          {
+            path: 'hawala',
+            element: <HawalaPage />,
+            handle: crumb('nav.hawala'),
+            children: [
+              { path: 'new', handle: crumb('common.add') },
+              { path: ':id/edit', handle: crumb('common.edit') },
+              { path: ':id/history', handle: crumb('finance.history') },
+            ],
+          },
+          {
+            path: 'office-expenses',
+            element: <OfficeExpensesPage />,
+            handle: crumb('nav.office_expenses'),
+            children: [
+              { path: 'new', handle: crumb('common.add') },
+              { path: ':id/edit', handle: crumb('common.edit') },
+              { path: ':id/history', handle: crumb('finance.history') },
+            ],
+          },
         ],
       },
       {

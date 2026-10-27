@@ -1,7 +1,8 @@
-import type { UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
-import type { ExchangeRate } from '@/types/api';
+import type { ExchangeRate, Paginated } from '@/types/api';
 
+import { useApi } from './api';
 import { todayShamsi } from './date';
 import { useList } from './hooks';
 
@@ -18,4 +19,22 @@ export function useTodayUsdRate(): UseQueryResult<ExchangeRate[]> & { rate: Exch
     date: todayShamsi(),
   });
   return { ...query, rate: query.data?.[0] ?? null };
+}
+
+/**
+ * The stored rate of `currency` on one Shamsi day, or null (none entered). AFN needs none.
+ * This is the rate a hawala / office expense / transaction saved for that day snapshots.
+ */
+export function useDayRate(date: string, currency: string): UseQueryResult<ExchangeRate | null> {
+  const api = useApi();
+  return useQuery({
+    queryKey: [...RATES_KEY, 'day', date, currency],
+    queryFn: async () => {
+      const data = await api.get<ExchangeRate[] | Paginated<ExchangeRate>>('/exchange-rates/', {
+        params: { date, currency },
+      });
+      return (Array.isArray(data) ? data : data.results)[0] ?? null;
+    },
+    enabled: currency !== 'AFN' && Boolean(date),
+  });
 }

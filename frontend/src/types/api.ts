@@ -255,3 +255,74 @@ export interface Paginated<T> {
   previous: string | null;
   results: T[];
 }
+
+/** finance.reports.amount_totals — afn / usd are null when some record's rate is unknown. */
+export interface AmountTotals {
+  by_currency: Record<string, string>;
+  afn: string | null;
+  usd: string | null;
+  groups: Record<string, { afn: string | null; usd: string | null }>;
+  unconverted: number;
+}
+
+/** A paged finance list with `totals` for the whole filtered set (not just the page). */
+export interface PaginatedWithTotals<T, Totals> extends Paginated<T> {
+  totals: Totals;
+}
+
+/** All currencies a hawala / office expense can be in (AFN included). */
+export type AnyCurrency = 'AFN' | Currency;
+
+/** HawalaSerializer. `rate_used` is the snapshot taken at save time (null for AFN / no rate). */
+export interface Hawala {
+  id: number;
+  branch: number;
+  date: string;
+  from_party: string;
+  to_party: string;
+  amount: string;
+  currency: AnyCurrency;
+  fee: string;
+  rate_used: string | null;
+  amount_afn: string | null;
+  fee_afn: string | null;
+  note: string;
+  created_by: number | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HawalaTotals {
+  amount: AmountTotals;
+  /** The only part of a hawala that is an expense (OPEX_HAWALA_FEE). */
+  fee: AmountTotals;
+}
+
+export type OfficeExpenseCategory =
+  'SALARY' | 'RENT' | 'FUEL' | 'KITCHEN' | 'STATIONERY' | 'CREDIT' | 'OTHER';
+
+/** OfficeExpenseSerializer */
+export interface OfficeExpense {
+  id: number;
+  branch: number;
+  date: string;
+  category: OfficeExpenseCategory;
+  amount: string;
+  currency: AnyCurrency;
+  rate_used: string | null;
+  amount_afn: string | null;
+  person: string;
+  bill_number: string;
+  description: string;
+  created_by: number | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** groups = per category; salary / non_salary = OPEX_SALARY / OPEX_OFFICE of the report. */
+export interface OfficeExpenseTotals extends AmountTotals {
+  salary: AmountTotals;
+  non_salary: AmountTotals;
+}

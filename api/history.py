@@ -47,15 +47,17 @@ class HistoryMixin:
         for record in records:
             changes = []
             if previous is not None:
-                delta = record.diff_against(previous, included_fields=list(fields))
-                for change in delta.changes:
-                    field = fields[change.field]
-                    changes.append({
-                        'field': change.field,
-                        'label': str(field.verbose_name),
-                        'old': _display(field, change.old, previous),
-                        'new': _display(field, change.new, record),
-                    })
+                # Compared directly, not with diff_against(): that uses model_to_dict(), which
+                # skips non-editable fields such as a snapshot rate_used (KeyError).
+                for name, field in fields.items():
+                    old, new = getattr(previous, field.attname), getattr(record, field.attname)
+                    if old != new:
+                        changes.append({
+                            'field': name,
+                            'label': str(field.verbose_name),
+                            'old': _display(field, old, previous),
+                            'new': _display(field, new, record),
+                        })
             entries.append({
                 'history_id': record.history_id,
                 'type': record.get_history_type_display(),

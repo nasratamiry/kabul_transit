@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AdminOverview } from '@/components/admin/AdminOverview';
 import { TodayRateBanner } from '@/components/admin/TodayRateBanner';
+import { OfficeMonthTile } from '@/components/finance/OfficeMonthTile';
 import { TodayRateDialog } from '@/components/finance/TodayRateDialog';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardBody } from '@/components/ui/Card';
@@ -41,9 +42,12 @@ export function Dashboard(): JSX.Element {
       {isSuperAdmin && <AdminOverview />}
       {!isSuperAdmin && (
         // A branch manager may enter today's rate (only today's); it unblocks new transactions.
-        <div className="mb-6">
+        <div className="mb-6 space-y-4">
           <TodayRateBanner onAdd={() => setRateDialog(true)} />
           <TodayRateDialog open={rateDialog} onClose={() => setRateDialog(false)} />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <OfficeMonthTile />
+          </div>
         </div>
       )}
       <Card className="overflow-hidden">

@@ -7,17 +7,19 @@ AFTER deleting the objects: the delete itself writes one more «-» row per obje
 """
 from accounts.models import Branch, User
 from config.models import FieldConfig
-from finance.models import ExchangeRate
+from finance.models import ExchangeRate, Hawala, OfficeExpense
 
 
 def purge_history(branch_codes=(), usernames=(), rate_author=None, branch_ids=()):
-    """Remove the history rows of test branches (and their FieldConfig), test users, and every
-    rate the test author entered — also rates the run already deleted. Returns the row count."""
+    """Remove the history rows of test branches (and their FieldConfig, hawala and office
+    expenses), test users, and every rate the test author entered — also rates the run already
+    deleted. Returns the row count."""
     removed = 0
     # Branches the run already deleted (e.g. DELKC) only live on in their own history rows.
     ids = set(branch_ids) | set(Branch.history.filter(code__in=list(branch_codes)).values_list('id', flat=True))
     if ids:
-        removed += FieldConfig.history.filter(branch_id__in=ids).delete()[0]
+        for model in (FieldConfig, Hawala, OfficeExpense):
+            removed += model.history.filter(branch_id__in=ids).delete()[0]
     if branch_codes:
         removed += Branch.history.filter(code__in=list(branch_codes)).delete()[0]
     if usernames:

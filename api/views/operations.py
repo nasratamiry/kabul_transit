@@ -14,12 +14,12 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 from api.filters import ShamsiDateFilter, parse_any_date
 from api.history import HistoryMixin
 from api.mixins import PortScopedQuerysetMixin, own_branch_kwargs
+from api.pagination import StandardPagination
 from api.permissions import IsBranchStaff
 from api.serializers import DocumentSerializer, TransactionSerializer
 from finance.utils import attach_usd_rates, kabul_today, require_todays_usd_rate
@@ -34,17 +34,10 @@ def _decimal_or(value, default):
     if value in (None, ''):
         return default
     try:
-        number = parse_decimal(normalize_digits(str(value)).replace('٫', '.'))
+        number = parse_decimal(value)
     except (ValueError, TypeError):
         return default
     return number if number.is_finite() else default
-
-
-class TransactionPagination(PageNumberPagination):
-    """Transactions grow every day, so this list (only) is paged: 25 by default, ?page_size= up to 200."""
-    page_size = 25
-    page_size_query_param = 'page_size'
-    max_page_size = 200
 
 
 class TransactionFilter(FilterSet):
@@ -67,7 +60,7 @@ class TransactionViewSet(HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelVi
                 .annotate(documents_count=Count('documents')))
     serializer_class = TransactionSerializer
     permission_classes = [IsBranchStaff]
-    pagination_class = TransactionPagination
+    pagination_class = StandardPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = TransactionFilter
     search_fields = ['serial_number', 'plate_afghan', 'driver_name',

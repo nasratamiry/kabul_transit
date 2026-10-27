@@ -36,6 +36,7 @@ import { isolateLtr, normalizeNumber } from '@/lib/digits';
 import { clearDraft, loadDraft, saveDraft } from '@/lib/drafts';
 import { toastError, useDebounced } from '@/lib/hooks';
 import { formatMoney, formatRate } from '@/lib/money';
+import { useDayRate } from '@/lib/rates';
 import {
   FIELD_TYPES,
   FK_TARGETS,
@@ -46,7 +47,7 @@ import {
   type TradeType,
 } from '@/lib/transactionSections';
 import { useAuth } from '@/stores/auth';
-import type { ExchangeRate, FormConfig, Paginated, PreviewSummary, Transaction } from '@/types/api';
+import type { FormConfig, PreviewSummary, Transaction } from '@/types/api';
 
 type Values = Record<string, string | number | boolean | null>;
 type ConfigField = FormConfig['form_fields'][number];
@@ -309,16 +310,7 @@ function FormBody({ config, tx, branch, tradeType }: FormBodyProps): JSX.Element
   const dateKey = toShamsiKey(String(values.date ?? '')) ?? todayShamsi();
 
   // The day's rate of this currency: shown under the field and used to pre-fill it.
-  const dayRate = useQuery({
-    queryKey: ['exchange-rates', 'day', dateKey, currency],
-    queryFn: async () => {
-      const data = await api.get<ExchangeRate[] | Paginated<ExchangeRate>>('/exchange-rates/', {
-        params: { date: dateKey, currency },
-      });
-      return (Array.isArray(data) ? data : data.results)[0] ?? null;
-    },
-    enabled: currency !== 'AFN',
-  });
+  const dayRate = useDayRate(dateKey, currency);
   useEffect(() => {
     if (currency !== 'AFN' && dayRate.data && !getValues('exchange_rate')) {
       setValue('exchange_rate', trimRate(dayRate.data.rate), { shouldDirty: true });

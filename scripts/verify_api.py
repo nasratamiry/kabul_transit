@@ -470,6 +470,88 @@ try:
         check('حذف معامله: مدیر بندر معاملهٔ بندر خودش را حذف می‌کند (۲۰۴)، بندر دیگر ۴۰۴',
               other_branch.status_code == 404 and own_branch.status_code == 204, f'other={other_branch.status_code}, own={own_branch.status_code}')
 
+        print('ل) حواله و مصارف دفتر: ارقام دری، بازهٔ تاریخ، جمع‌ها، snapshot نرخ، بندر، ۴۲۸، تاریخچه')
+        from finance.reports import income_statement  # noqa: E402
+        from kabulcargo_backend.utils import normalize_digits, parse_decimal  # noqa: E402
+        check('normalize_digits / parse_decimal: «٫» → «.» و «٬» حذف (۱٬۲۳۴٫۵۰ → 1234.50)',
+              normalize_digits('۱۲٫۵') == '12.5' and parse_decimal('۱٬۲۳۴٫۵۰') == Decimal('1234.50')
+              and parse_decimal('٣٬٠٠٠٫٢٥') == Decimal('3000.25'), normalize_digits('۱۲٫۵'))
+
+        start, end = today - timedelta(days=4), today
+        ExchangeRate.objects.update_or_create(date=start, currency='USD', defaults={'rate': Decimal('80')})
+        ExchangeRate.objects.update_or_create(date=start, currency='PKR', defaults={'rate': Decimal('0.25')})
+        Hawala.objects.filter(branch=branch_a).delete()
+        OfficeExpense.objects.filter(branch=branch_a).delete()
+        h_afn = client_a.post('/api/hawala/', {'branch': branch_a.id, 'date': str(start), 'from_party': 'الف', 'to_party': 'ب',
+                                                'amount': '۱٬۲۵۰٫۷۵', 'currency': 'AFN', 'fee': '۵۰'}, format='json')
+        h_usd = client_a.post('/api/hawala/', {'branch': branch_a.id, 'date': str(start), 'from_party': 'ج', 'to_party': 'د',
+                                                'amount': '100', 'currency': 'USD', 'fee': '2'}, format='json')
+        h_old = Hawala.objects.create(branch=branch_a, date=start - timedelta(days=30), from_party='x', to_party='y',
+                                      amount=Decimal('5'), currency='AFN', fee=Decimal('1'))
+        e_rent = client_a.post('/api/office-expenses/', {'branch': branch_a.id, 'date': str(start), 'category': 'RENT',
+                                                          'amount': '۳٬۰۰۰', 'currency': 'AFN'}, format='json')
+        e_pkr = client_a.post('/api/office-expenses/', {'branch': branch_a.id, 'date': str(start), 'category': 'FUEL',
+                                                         'amount': '400', 'currency': 'PKR'}, format='json')
+        e_salary = client_a.post('/api/office-expenses/', {'branch': branch_a.id, 'date': str(end), 'category': 'SALARY',
+                                                            'amount': '۲۵۰', 'currency': 'USD'}, format='json')
+        check('حواله / مصرف دفتر با ارقام دری و «٫» ذخیره می‌شود؛ rate_used = نرخ همان روز',
+              h_afn.status_code == 201 and h_afn.data['amount'] == '1250.75' and h_afn.data['rate_used'] is None
+              and h_usd.status_code == 201 and h_usd.data['rate_used'] == '80.00000000' and h_usd.data['fee_afn'] == '160.00'
+              and e_rent.data.get('amount') == '3000.00' and e_pkr.data.get('rate_used') == '0.25000000'
+              and e_pkr.data.get('amount_afn') == '100.00' and e_salary.status_code == 201,
+              f'{h_afn.status_code} {h_afn.data.get("amount")} | {h_usd.data.get("rate_used")} | {e_pkr.data.get("amount_afn")}')
+
+        period = {'date_from': to_dari(start), 'date_to': str(end.togregorian()), 'page_size': 1}
+        hl = client_a.get('/api/hawala/', period)
+        ol = client_a.get('/api/office-expenses/', period)
+        check('بازهٔ تاریخ (شمسی دری / میلادی) + صفحه‌بندی + totals برای کل فیلتر (نه فقط صفحه)',
+              hl.status_code == 200 and hl.data['count'] == 2 and len(hl.data['results']) == 1
+              and h_old.id not in [r['id'] for r in hl.data['results']]
+              and hl.data['totals']['amount']['by_currency'] == {'AFN': '1250.75', 'USD': '100.00'}
+              and hl.data['totals']['fee']['afn'] == '210.00' and hl.data['totals']['fee']['usd'] == '2.63'
+              and ol.data['count'] == 3 and ol.data['totals']['afn'] == '23100.00'
+              and ol.data['totals']['salary']['afn'] == '20000.00' and ol.data['totals']['non_salary']['afn'] == '3100.00'
+              and ol.data['totals']['groups']['FUEL']['afn'] == '100.00',
+              f"hawala={hl.data.get('count')} {hl.data.get('totals')} | office={ol.data.get('count')} {ol.data.get('totals')}")
+
+        report = income_statement(branch_id=branch_a.id, date_from=start, date_to=end)
+        lines = {line['code']: line for line in report['lines']}
+        check('جمع صفحه‌ها = سطرهای گزارش عاید (OPEX_OFFICE / OPEX_SALARY / OPEX_HAWALA_FEE، افغانی و دالر)',
+              lines['OPEX_OFFICE']['amount_afn'] == ol.data['totals']['non_salary']['afn']
+              and lines['OPEX_SALARY']['amount_afn'] == ol.data['totals']['salary']['afn']
+              and lines['OPEX_HAWALA_FEE']['amount_afn'] == hl.data['totals']['fee']['afn']
+              and lines['OPEX_OFFICE']['amount_usd'] == ol.data['totals']['non_salary']['usd']
+              and lines['OPEX_HAWALA_FEE']['amount_usd'] == hl.data['totals']['fee']['usd'],
+              f"report={[(c, lines[c]['amount_afn']) for c in ('OPEX_OFFICE', 'OPEX_SALARY', 'OPEX_HAWALA_FEE')]}")
+
+        ExchangeRate.objects.filter(date=start, currency='USD').update(rate=Decimal('95'))
+        again = client_a.get('/api/hawala/', period)
+        stored = client_a.get(f"/api/hawala/{h_usd.data['id']}/")
+        check('تغییر بعدی نرخ روز، رکورد قبلی را عوض نمی‌کند (snapshot)',
+              stored.data['rate_used'] == '80.00000000' and again.data['totals']['fee']['afn'] == '210.00',
+              f"rate_used={stored.data['rate_used']}, fee afn={again.data['totals']['fee']['afn']}")
+
+        spoof = client_a.post('/api/office-expenses/', {'branch': branch_b.id, 'date': str(today), 'category': 'OTHER',
+                                                         'amount': '1', 'currency': 'AFN'}, format='json')
+        b_sees = [r['id'] for r in results(client_b.get('/api/office-expenses/', {'page_size': 200}))]
+        check('مدیر بندر برای بندر دیگر ثبت نمی‌کند (در بندر خودش ذخیره می‌شود) و بندر دیگر آن را نمی‌بیند',
+              spoof.status_code == 201 and spoof.data['branch'] == branch_a.id and spoof.data['id'] not in b_sees,
+              f"branch={spoof.data.get('branch')}")
+
+        ExchangeRate.objects.filter(date=today, currency='USD').delete()
+        blocked_h = client_a.post('/api/hawala/', {'branch': branch_a.id, 'from_party': 'a', 'to_party': 'b', 'amount': '1',
+                                                   'currency': 'AFN'}, format='json')
+        blocked_e = client_a.post('/api/office-expenses/', {'branch': branch_a.id, 'category': 'OTHER', 'amount': '1',
+                                                            'currency': 'AFN'}, format='json')
+        client_a.patch(f"/api/hawala/{h_afn.data['id']}/", {'fee': '60', 'branch': branch_a.id}, format='json')
+        history = client_a.get(f"/api/hawala/{h_afn.data['id']}/history/")
+        other_history = client_b.get(f"/api/office-expenses/{e_rent.data['id']}/history/")
+        check('بدون نرخ امروز: ثبت حواله و مصرف دفتر ۴۲۸؛ تاریخچه فقط فیلد تغییرکرده؛ بندر دیگر ۴۰۴',
+              blocked_h.status_code == 428 and blocked_e.status_code == 428
+              and history.data[0]['changes'] == [{'field': 'fee', 'label': 'مصرف حواله', 'old': '50.00', 'new': '60.00'}]
+              and other_history.status_code == 404,
+              f'{blocked_h.status_code}/{blocked_e.status_code}, {history.data[0] if history.status_code == 200 else history.status_code}')
+
         # Deleting a document (or its transaction) removes the stored file too, after the commit.
         from django.core.files.storage import default_storage  # noqa: E402
         gone = client_a.post('/api/documents/', {'transaction': tx_a.id, 'file': SimpleUploadedFile('حذفی.png', png)},

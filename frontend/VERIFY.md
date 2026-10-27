@@ -242,3 +242,24 @@ node scripts/verify-stage12b.mjs ..\stage12b_screenshots     # also writes 02-pr
 | 19  | Dashboard banner turns green                                                            |
 | 20  | Delete a transaction from its detail page (own branch); other branch → 404              |
 | E   | No uncaught page errors                                                                 |
+
+---
+
+# Stage 13 — finance pages (hawala, office expenses)
+
+```powershell
+cd "D:\Kabul Cargo TN\frontend"
+..\.venv\Scripts\python scripts\cleanup-stage13.py --setup   # e2e_admin, e2e_mgr, e2e_mgr_b, E2E13A/B, USD 80 + PKR 0.25 ten days ago, USD 70 today
+node scripts/verify-stage13.mjs ..\stage13_screenshots
+..\.venv\Scripts\python scripts\cleanup-stage13.py           # removes records, rates and their history
+```
+
+25 checks: sidebar «مالی» for both roles; hawala and office-expense create / edit / delete with
+Dari digits («۱٬۲۵۰٫۷۵»); the form shows the day's rate; the snapshot rate survives a later rate
+change; history modal; category summary strip (salary separate) and totals footer equal the API
+totals; category and date-range filters in the URL; branch scoping (list, direct id → 404,
+foreign branch id → saved to own branch); super admin branch column and filter; page totals equal
+the income statement's OPEX_OFFICE / OPEX_SALARY / OPEX_HAWALA_FEE; 428 on create and the
+form's enter-today's-rate-then-retry flow; dashboard tile «مصارف دفتر این ماه» for both roles.
+
+Each user may make 100 API requests a minute (stage 7 throttle); the script stays under it.
