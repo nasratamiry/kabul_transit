@@ -25,10 +25,11 @@ from django.core.exceptions import ValidationError  # noqa: E402
 from django.core.management import call_command  # noqa: E402
 from django.db import IntegrityError, transaction  # noqa: E402
 from django.test import Client  # noqa: E402
+from rest_framework.test import APIClient  # noqa: E402
 
 from accounts.models import Branch, User  # noqa: E402
-from config.management.commands.seed_field_config import FIELD_SPEC  # noqa: E402
-from config.models import FieldConfig, configurable_transaction_fields  # noqa: E402
+from config.management.commands.seed_field_config import FIELD_SPEC, default_field_configs  # noqa: E402
+from config.models import LOCKED_FIELDS, FieldConfig, configurable_transaction_fields  # noqa: E402
 from operations.models import Transaction  # noqa: E402
 
 failures = []
@@ -151,7 +152,7 @@ try:
         admin_user = User.objects.create_superuser('zz_verify_cfg', None, 'Verify-Pass-123')
         client = Client(HTTP_HOST='127.0.0.1')
         client.force_login(admin_user)
-        row = FieldConfig.objects.get(branch=branch, trade_type='EXPORT', field_name='serial_number')
+        row = FieldConfig.objects.get(branch=branch, trade_type='EXPORT', field_name='goods_type')
         pages = ['/admin/config/fieldconfig/', '/admin/config/fieldconfig/add/',
                  f'/admin/config/fieldconfig/{row.pk}/change/', f'/admin/config/fieldconfig/{row.pk}/history/']
         codes = [client.get(page).status_code for page in pages]
@@ -169,13 +170,13 @@ try:
               f'status={response.status_code}')
 
         print('۹. list_editable کار می‌کند')
-        url = f'/admin/config/fieldconfig/?branch__id__exact={branch.pk}&trade_type__exact=EXPORT&q=serial_number'
+        url = f'/admin/config/fieldconfig/?branch__id__exact={branch.pk}&trade_type__exact=EXPORT&q=goods_type'
         response = client.post(url, {
             'form-TOTAL_FORMS': '1', 'form-INITIAL_FORMS': '1', 'form-MIN_NUM_FORMS': '0', 'form-MAX_NUM_FORMS': '1000',
-            'form-0-id': row.pk, 'form-0-visibility': 'OPTIONAL', 'form-0-sort_order': '15', '_save': 'ذخیره',
+            'form-0-id': row.pk, 'form-0-visibility': 'REQUIRED', 'form-0-sort_order': '15', '_save': 'ذخیره',
         })
         row.refresh_from_db()
-        check('inline edit saved (302)', response.status_code == 302 and row.visibility == 'OPTIONAL'
+        check('inline edit saved (302)', response.status_code == 302 and row.visibility == 'REQUIRED'
               and row.sort_order == 15, f'status={response.status_code}, {row.visibility}/{row.sort_order}')
 
         print('۱۰. تاریخچه')
@@ -206,6 +207,157 @@ try:
               f'status={response.status_code}')
         check('editing a branch does not seed again',
               (auto_branch.save() or True) and FieldConfig.objects.filter(branch=auto_branch).count() == auto_rows)
+
+        print('۱۳. فیلدهای قفل')
+        api = APIClient(HTTP_HOST='127.0.0.1')
+        api.force_authenticate(admin_user)
+        manager = User.objects.create_user('zz_verify_cfg_mgr', password='Verify-Pass-123',
+                                           role='branch_manager', branch=branch)
+        manager_api = APIClient(HTTP_HOST='127.0.0.1')
+        manager_api.force_authenticate(manager)
+        check('locked list', LOCKED_FIELDS == ('serial_number', 'date', 'customer_payment', 'currency',
+                                               'exchange_rate'), str(LOCKED_FIELDS))
+        check('every locked field defaults to REQUIRED everywhere',
+              all(defaults['visibility'] == 'REQUIRED' for _, name, defaults in default_field_configs()
+                  if name in LOCKED_FIELDS))
+        blocked = []
+        for name in LOCKED_FIELDS:
+            for vis in ('HIDDEN', 'OPTIONAL'):
+                locked_row = FieldConfig.objects.get(branch=branch, trade_type='TRANSIT', field_name=name)
+                locked_row.visibility = vis
+                try:
+                    locked_row.full_clean()
+                except ValidationError as exc:
+                    blocked.append('قفل' in exc.message_dict.get('visibility', [''])[0])
+        check('model clean() blocks HIDDEN and OPTIONAL for all 5', blocked == [True] * 10, str(blocked))
+        currency_row = FieldConfig.objects.get(branch=branch, trade_type='EXPORT', field_name='currency')
+        response = api.patch(f'/api/field-configs/{currency_row.pk}/', {'visibility': 'HIDDEN'}, format='json')
+        currency_row.refresh_from_db()
+        check('API PATCH on a locked field → 400 with a Dari message',
+              response.status_code == 400 and 'قفل' in response.json()['visibility'][0]
+              and currency_row.visibility == 'REQUIRED', f'{response.status_code}')
+        check('serializer marks locked rows', response.status_code == 400 and api.get(
+            f'/api/field-configs/{currency_row.pk}/').json()['locked'] is True)
+        response = client.post(url.replace('q=goods_type', 'q=currency'), {
+            'form-TOTAL_FORMS': '1', 'form-INITIAL_FORMS': '1', 'form-MIN_NUM_FORMS': '0', 'form-MAX_NUM_FORMS': '1000',
+            'form-0-id': currency_row.pk, 'form-0-visibility': 'HIDDEN', 'form-0-sort_order': '410', '_save': 'ذخیره',
+        })
+        currency_row.refresh_from_db()
+        check('admin inline edit cannot hide a locked field either',
+              response.status_code == 200 and currency_row.visibility == 'REQUIRED', f'{response.status_code}')
+
+        print('۱۴. ذخیرهٔ یکجا (bulk)')
+        export = {r.field_name: r for r in FieldConfig.objects.filter(branch=branch, trade_type='EXPORT')}
+        history_before = FieldConfig.history.filter(branch=branch, trade_type='EXPORT').count()
+        payload = [{'id': export['remarks'].pk, 'visibility': 'HIDDEN', 'sort_order': '۵۰'},
+                   {'id': export['weight'].pk, 'visibility': 'REQUIRED', 'sort_order': 181},
+                   {'id': export['quantity'].pk, 'visibility': export['quantity'].visibility,
+                    'sort_order': export['quantity'].sort_order}]
+        check('branch manager → 403', manager_api.patch('/api/field-configs/bulk/', payload, format='json')
+              .status_code == 403)
+        response = api.patch('/api/field-configs/bulk/', payload, format='json')
+        export['remarks'].refresh_from_db()
+        check('bulk saves the changed rows (Dari digits accepted)',
+              response.status_code == 200 and response.json()['changed'] == 2
+              and (export['remarks'].visibility, export['remarks'].sort_order) == ('HIDDEN', 50),
+              f'{response.status_code} {response.json()}')
+        new_history = FieldConfig.history.filter(branch=branch, trade_type='EXPORT').order_by('-history_id')[:2]
+        check('one history row per changed row, credited to the admin; unchanged row none',
+              FieldConfig.history.filter(branch=branch, trade_type='EXPORT').count() == history_before + 2
+              and all(h.history_user == admin_user for h in new_history))
+        response = api.patch('/api/field-configs/bulk/', [
+            {'id': export['goods_type'].pk, 'visibility': 'HIDDEN', 'sort_order': 170},
+            {'id': export['date'].pk, 'visibility': 'HIDDEN', 'sort_order': 20}], format='json')
+        export['goods_type'].refresh_from_db()
+        check('a locked row in the batch → 400 and nothing saved',
+              response.status_code == 400 and 'date' in response.json()['fields']
+              and export['goods_type'].visibility == 'REQUIRED', f'{response.status_code}')
+        other_type = FieldConfig.objects.get(branch=branch, trade_type='IMPORT', field_name='remarks')
+        response = api.patch('/api/field-configs/bulk/', [
+            {'id': export['remarks'].pk, 'visibility': 'OPTIONAL', 'sort_order': 50},
+            {'id': other_type.pk, 'visibility': 'OPTIONAL', 'sort_order': 50}], format='json')
+        check('rows of two branch × type scopes → 400', response.status_code == 400)
+        check('unknown id → 400', api.patch('/api/field-configs/bulk/', [
+            {'id': 999_999_999, 'visibility': 'OPTIONAL', 'sort_order': 1}], format='json').status_code == 400)
+        check('empty list → 400', api.patch('/api/field-configs/bulk/', [], format='json').status_code == 400)
+
+        print('۱۵. کپی')
+        def settings_of(b, tt):
+            return {r.field_name: (r.visibility, r.sort_order)
+                    for r in FieldConfig.objects.filter(branch=b, trade_type=tt)}
+        check('branch manager → 403', manager_api.post('/api/field-configs/copy/', {
+            'source_branch': branch.pk, 'source_trade_type': 'EXPORT', 'target_branch': new_branch.pk},
+            format='json').status_code == 403)
+        response = api.post('/api/field-configs/copy/', {
+            'source_branch': branch.pk, 'source_trade_type': 'EXPORT', 'target_branch': new_branch.pk},
+            format='json')
+        check('copy to one branch: same visibility and order',
+              response.status_code == 200 and settings_of(new_branch, 'EXPORT') == settings_of(branch, 'EXPORT')
+              and response.json()['branches'] == 1, str(response.json()))
+        check('copy wrote history for the target, credited to the admin',
+              FieldConfig.history.filter(branch=new_branch, trade_type='EXPORT', history_type='~',
+                                         history_user=admin_user).count() == response.json()['changed'] > 0)
+        response = api.post('/api/field-configs/copy/', {
+            'source_branch': branch.pk, 'source_trade_type': 'EXPORT', 'target_branch': branch.pk,
+            'target_trade_type': 'TIR_CARNET'}, format='json')
+        check('copy to another trade type of the same branch',
+              response.status_code == 200 and settings_of(branch, 'TIR_CARNET') == settings_of(branch, 'EXPORT'))
+        check('source == target → 400', api.post('/api/field-configs/copy/', {
+            'source_branch': branch.pk, 'source_trade_type': 'EXPORT', 'target_branch': branch.pk},
+            format='json').status_code == 400)
+        check('no target and not all_branches → 400', api.post('/api/field-configs/copy/', {
+            'source_branch': branch.pk, 'source_trade_type': 'EXPORT'}, format='json').status_code == 400)
+        response = api.post('/api/field-configs/copy/', {
+            'source_branch': branch.pk, 'source_trade_type': 'EXPORT', 'all_branches': True}, format='json')
+        everywhere = all(settings_of(b, 'EXPORT') == settings_of(branch, 'EXPORT')
+                         for b in Branch.objects.exclude(pk=branch.pk))
+        check('copy to all branches', response.status_code == 200 and everywhere
+              and response.json()['branches'] == Branch.objects.count() - 1, str(response.json()))
+
+        print('۱۶. بازگشت به پیش‌فرض')
+        expected = {name: (d['visibility'], d['sort_order'])
+                    for tt, name, d in default_field_configs() if tt == 'EXPORT'}
+        import_before = settings_of(branch, 'IMPORT')
+        check('branch manager → 403', manager_api.post('/api/field-configs/reset/', {
+            'branch': branch.pk, 'trade_type': 'EXPORT'}, format='json').status_code == 403)
+        response = api.post('/api/field-configs/reset/', {'branch': branch.pk, 'trade_type': 'EXPORT'}, format='json')
+        check('reset → exactly FIELD_SPEC (+ EXPORT overrides)',
+              response.status_code == 200 and settings_of(branch, 'EXPORT') == expected
+              and response.json()['changed'] > 0, str(response.json()))
+        check('other trade types untouched', settings_of(branch, 'IMPORT') == import_before)
+        FieldConfig.objects.filter(branch=branch, trade_type='EXPORT', field_name='remarks').delete()
+        response = api.post('/api/field-configs/reset/', {'branch': branch.pk, 'trade_type': 'EXPORT'}, format='json')
+        check('reset recreates a missing row', settings_of(branch, 'EXPORT') == expected)
+        check('bad trade type → 400', api.post('/api/field-configs/reset/', {
+            'branch': branch.pk, 'trade_type': 'NOPE'}, format='json').status_code == 400)
+
+        print('۱۷. شمار معاملات دارای مقدار')
+        Transaction.objects.create(branch=branch, trade_type='EXPORT', serial_number='ZZCFG-1',
+                                   goods_type='آرد', customer_payment=100)
+        Transaction.objects.create(branch=branch, trade_type='EXPORT', serial_number='ZZCFG-2',
+                                   weight=12, customer_payment=100)
+        Transaction.objects.create(branch=branch, trade_type='IMPORT', serial_number='ZZCFG-3', goods_type='برنج')
+        response = api.get('/api/field-configs/usage/', {'branch': branch.pk, 'trade_type': 'EXPORT'})
+        usage = response.json()
+        check('counts per field for this branch × type only',
+              response.status_code == 200 and usage['goods_type'] == 1 and usage['weight'] == 1
+              and usage['trader'] == 0 and usage['remarks'] == 0 and usage['serial_number'] == 2
+              and len(usage) == len(FIELD_SPEC), str({k: usage.get(k) for k in ('goods_type', 'weight', 'trader')}))
+        check('branch manager → 403', manager_api.get('/api/field-configs/usage/', {
+            'branch': branch.pk, 'trade_type': 'EXPORT'}).status_code == 403)
+
+        print('۱۸. API تاریخچه')
+        response = api.get(f"/api/field-configs/{export['weight'].pk}/history/")
+        entries = response.json()
+        check('history: newest first, the change, user and dual date',
+              response.status_code == 200 and entries[0]['user'] == 'zz_verify_cfg'
+              and any(c['field'] == 'visibility' for c in entries[0]['changes']) and '|' in entries[0]['date'],
+              str(entries[0] if entries else None))
+        own = manager_api.get(f"/api/field-configs/{export['weight'].pk}/history/").status_code
+        foreign = FieldConfig.objects.filter(branch=new_branch).first()
+        other = manager_api.get(f'/api/field-configs/{foreign.pk}/history/').status_code
+        check("manager: own branch's history 200, another branch's 404", (own, other) == (200, 404),
+              f'{own}, {other}')
 
         raise Rollback
 except Rollback:

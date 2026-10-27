@@ -205,6 +205,21 @@ export interface HistoryEntry {
 }
 
 /** GET /api/form-config/ — hidden fields are already left out, sorted by sort_order. */
+export type FieldVisibility = 'REQUIRED' | 'OPTIONAL' | 'HIDDEN';
+
+/** One FieldConfig row (/api/field-configs/): a field of one branch × trade type. */
+export interface FieldConfigRow {
+  id: number;
+  branch: number;
+  trade_type: Transaction['trade_type'];
+  field_name: string;
+  field_label_fa: string;
+  visibility: FieldVisibility;
+  sort_order: number;
+  /** Always REQUIRED (serial, date, payment, currency, rate): the API refuses any change. */
+  locked: boolean;
+}
+
 export interface FormConfig {
   branch: number;
   trade_type: Transaction['trade_type'];

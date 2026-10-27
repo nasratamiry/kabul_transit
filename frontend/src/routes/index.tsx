@@ -5,6 +5,7 @@ import { Branches } from '@/pages/admin/Branches';
 import { DocumentRequirements } from '@/pages/admin/DocumentRequirements';
 import { DocumentTypes } from '@/pages/admin/DocumentTypes';
 import { ExchangeRates } from '@/pages/admin/ExchangeRates';
+import { FieldSettings } from '@/pages/admin/FieldSettings';
 import { StatementLines } from '@/pages/admin/StatementLines';
 import { Users } from '@/pages/admin/Users';
 import { Dashboard } from '@/pages/Dashboard';
@@ -181,6 +182,12 @@ export const router = createBrowserRouter([
             path: 'document-requirements',
             element: <DocumentRequirements />,
             handle: crumb('nav.document_requirements'),
+          },
+          {
+            path: 'field-settings',
+            element: <FieldSettings />,
+            handle: crumb('nav.field_config'),
+            children: [{ path: ':id/history', handle: crumb('field_settings.history') }],
           },
           {
             path: 'statement-lines',

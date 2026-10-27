@@ -240,6 +240,17 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
     با `missing_documents_condition()`. سند ناقص هرگز مانع ذخیره نیست.
   - `/api/documents/` بدون `?page=` آرایه، با `?page=` صفحه‌بندی (`OptionalPagination`). جستجو رقم دری را نرمال می‌کند.
   - آزمایش: `verify_documents.py` (۳۸) + `cleanup-documents.py --setup` → `verify-documents.mjs` (۳۰) → `cleanup-documents.py`.
+- [x] صفحهٔ تنظیم فیلدها (`/admin/field-settings`، فقط سوپر ادمین)
+  - فیلدهای قفل (`config.models.LOCKED_FIELDS`): serial_number، date، customer_payment، currency، exchange_rate —
+    همیشه REQUIRED؛ `FieldConfig.clean()` (پس API، bulk، کپی و پنل ادمین همه) رد می‌کند.
+  - `PATCH /api/field-configs/bulk/` (فهرست `{id, visibility, sort_order}` یک بندر × نوع، همه یا هیچ)،
+    `POST copy/` (به یک بندر/نوع یا `all_branches`)، `POST reset/` (از `default_field_configs()`)،
+    `GET usage/` (شمار معاملات دارای مقدار هر فیلد)، `<id>/history/`. هر ردیف تغییرکرده یک ردیف تاریخچه.
+  - پیش‌نمایش = `FormPreview` در `TransactionForm.tsx` (همان renderer فورم واقعی، فقط‌خواندنی).
+  - ترتیب فقط داخل هر بخش فورم؛ جابجایی همان sort_orderهای خود بخش را دوباره پخش می‌کند.
+  - E2E «کپی به همهٔ بندرها» بندرهای واقعی را هم تغییر می‌دهد؛ fixture قبلش snapshot می‌گیرد و cleanup برمی‌گرداند.
+  - آزمایش: `verify_field_config.py` + `cleanup-field-settings.py --setup` → `verify-field-settings.mjs` (۲۲)
+    → `cleanup-field-settings.py`؛ `lighthouse-field-settings.mjs`.
 - [ ] فاز دوم: Transaction، FieldConfig، نرخ، فرانت (بعد از رسیدن اکسل جدید)
 
 ## graphify

@@ -7,6 +7,10 @@ from operations.models import Transaction
 # Set by the page itself (one page per branch + trade type), never by FieldConfig.
 _NOT_CONFIGURABLE = {'branch', 'trade_type'}
 
+# Always REQUIRED, in every branch and trade type: without them a transaction cannot be saved
+# (serial_number has no default) or its single revenue cannot be converted to AFN.
+LOCKED_FIELDS = ('serial_number', 'date', 'customer_payment', 'currency', 'exchange_rate')
+
 
 def configurable_transaction_fields():
     """(name, Dari label) for every Transaction field a form can show, in model order."""
@@ -58,6 +62,9 @@ class FieldConfig(models.Model):
         # field_name must be a Transaction field that a form can actually show
         if self.field_name not in dict(configurable_transaction_fields()):
             raise ValidationError({'field_name': f'فیلد «{self.field_name}» در مدل معامله موجود نیست.'})
+        if self.field_name in LOCKED_FIELDS and self.visibility != self.Visibility.REQUIRED:
+            raise ValidationError({'visibility': f'فیلد «{self.field_label_fa}» قفل است و همیشه «اجباری» '
+                                                 'می‌ماند؛ بدون آن معامله ثبت یا حساب شده نمی‌تواند.'})
 
 
 class DocumentRequirement(models.Model):

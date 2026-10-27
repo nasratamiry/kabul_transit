@@ -56,7 +56,7 @@ const ADMIN: NavItem[] = [
   { label: 'nav.statement_lines', icon: ListOrdered, to: '/admin/statement-lines' },
   { label: 'nav.document_types', icon: FileStack, to: '/admin/document-types' },
   { label: 'nav.document_requirements', icon: ClipboardCheck, to: '/admin/document-requirements' },
-  { label: 'nav.field_config', icon: SlidersHorizontal },
+  { label: 'nav.field_config', icon: SlidersHorizontal, to: '/admin/field-settings' },
 ];
 
 interface SidebarProps {

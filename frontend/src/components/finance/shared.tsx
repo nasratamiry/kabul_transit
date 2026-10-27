@@ -235,17 +235,25 @@ export function HistoryModal({
   endpoint,
   id,
   ns,
+  title,
   onClose,
 }: {
   endpoint: string;
   id: number;
   ns: string;
+  /** What the history is of, shown after the dialog's title. */
+  title?: string;
   onClose(): void;
 }): JSX.Element {
   const { t, i18n } = useTranslation();
   const history = useItem<HistoryEntry[]>([ns, 'history'], `${endpoint}${id}/history/`);
   return (
-    <Modal open onClose={onClose} title={t('finance.history_title')} size="lg">
+    <Modal
+      open
+      onClose={onClose}
+      title={title ? `${t('finance.history_title')} — ${title}` : t('finance.history_title')}
+      size="lg"
+    >
       <div data-testid="history-modal">
         {history.isError ? (
           <p className="text-sm text-red-700 dark:text-red-400">{t('finance.not_found')}</p>

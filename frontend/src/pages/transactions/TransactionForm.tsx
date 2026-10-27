@@ -419,14 +419,7 @@ function FormBody({ config, tx, branch, tradeType }: FormBodyProps): JSX.Element
     );
   }
 
-  const sections = SECTIONS.map((s) => ({
-    ...s,
-    fields: s.fields
-      .map((name) => byName.get(name))
-      .filter((f): f is ConfigField => Boolean(f))
-      .filter((f) => f.field_name !== 'exchange_rate' || currency !== 'AFN')
-      .sort((a, b) => a.sort_order - b.sort_order),
-  })).filter((s) => s.fields.length > 0);
+  const sections = visibleSections(byName, currency);
 
   // An «add new» trip saves the form first, and comes back here with the new id.
   const returnTo = encodeURIComponent(location.pathname + location.search);
@@ -448,54 +441,46 @@ function FormBody({ config, tx, branch, tradeType }: FormBodyProps): JSX.Element
         data-testid="tx-form"
       >
         <div className="space-y-6">
-          {sections.map((section) => (
-            <Card key={section.key} className="p-5" data-testid={`section-${section.key}`}>
-              <h2 className="mb-4 font-semibold text-brand dark:text-emerald-300">
-                {t(`sections.${section.key}`)}
-              </h2>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {section.fields.map((f) => (
-                  <Field
-                    key={f.field_name}
-                    field={f}
-                    required={
-                      f.required || (f.field_name === 'exchange_rate' && currency !== 'AFN')
-                    }
-                    register={register}
-                    control={control}
-                    error={errors[f.field_name]?.message as string | undefined}
-                    selectedLabel={
-                      f.field_name === 'trader'
-                        ? tx?.trader === values.trader
-                          ? tx?.trader_name
-                          : undefined
-                        : f.field_name === 'transport_company' &&
-                            tx?.transport_company === values.transport_company
-                          ? tx?.transport_company_name
-                          : undefined
-                    }
-                    addNewTo={
-                      FK_TARGETS[f.field_name]
-                        ? `${FK_TARGETS[f.field_name]?.base}/new?return=${returnTo}`
+          <FormSections
+            sections={sections}
+            renderField={(f) => (
+              <Field
+                key={f.field_name}
+                field={f}
+                required={f.required || (f.field_name === 'exchange_rate' && currency !== 'AFN')}
+                register={register}
+                control={control}
+                error={errors[f.field_name]?.message as string | undefined}
+                selectedLabel={
+                  f.field_name === 'trader'
+                    ? tx?.trader === values.trader
+                      ? tx?.trader_name
+                      : undefined
+                    : f.field_name === 'transport_company' &&
+                        tx?.transport_company === values.transport_company
+                      ? tx?.transport_company_name
+                      : undefined
+                }
+                addNewTo={
+                  FK_TARGETS[f.field_name]
+                    ? `${FK_TARGETS[f.field_name]?.base}/new?return=${returnTo}`
+                    : undefined
+                }
+                onBeforeAddNew={() => saveDraft(draftKey, getValues())}
+                hint={
+                  f.field_name === 'exchange_rate'
+                    ? dayRate.data
+                      ? t('transactions.rate_hint', {
+                          rate: formatRate(dayRate.data.rate, i18n.language),
+                        })
+                      : dayRate.isFetched
+                        ? t('transactions.rate_hint_missing', { currency })
                         : undefined
-                    }
-                    onBeforeAddNew={() => saveDraft(draftKey, getValues())}
-                    hint={
-                      f.field_name === 'exchange_rate'
-                        ? dayRate.data
-                          ? t('transactions.rate_hint', {
-                              rate: formatRate(dayRate.data.rate, i18n.language),
-                            })
-                          : dayRate.isFetched
-                            ? t('transactions.rate_hint_missing', { currency })
-                            : undefined
-                        : undefined
-                    }
-                  />
-                ))}
-              </div>
-            </Card>
-          ))}
+                    : undefined
+                }
+              />
+            )}
+          />
           <div className="flex justify-end gap-3">
             <Button variant="secondary" onClick={() => void onCancel()} data-testid="tx-cancel">
               {t('common.cancel')}
@@ -509,6 +494,80 @@ function FormBody({ config, tx, branch, tradeType }: FormBodyProps): JSX.Element
         <SummaryPanel preview={preview.data} loading={preview.isFetching} lang={i18n.language} />
       </form>
     </>
+  );
+}
+
+interface FormSection {
+  key: string;
+  fields: ConfigField[];
+}
+
+/**
+ * The form's sections with the shown fields of each, in sort_order (never alphabetical).
+ * exchange_rate only appears for a currency other than AFN.
+ */
+function visibleSections(byName: Map<string, ConfigField>, currency: string): FormSection[] {
+  return SECTIONS.map((s) => ({
+    key: s.key,
+    fields: s.fields
+      .map((name) => byName.get(name))
+      .filter((f): f is ConfigField => Boolean(f))
+      .filter((f) => f.field_name !== 'exchange_rate' || currency !== 'AFN')
+      .sort((a, b) => a.sort_order - b.sort_order),
+  })).filter((s) => s.fields.length > 0);
+}
+
+function FormSections({
+  sections,
+  renderField,
+}: {
+  sections: FormSection[];
+  renderField(field: ConfigField): JSX.Element;
+}): JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <>
+      {sections.map((section) => (
+        <Card key={section.key} className="p-5" data-testid={`section-${section.key}`}>
+          <h2 className="mb-4 font-semibold text-brand dark:text-emerald-300">
+            {t(`sections.${section.key}`)}
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2">{section.fields.map(renderField)}</div>
+        </Card>
+      ))}
+    </>
+  );
+}
+
+/**
+ * The transaction form exactly as a branch manager will see it for `config` (a new record,
+ * currency AFN), read-only: the super admin's field settings page previews unsaved settings
+ * with it. Same sections, inputs and required marks as <FormBody>.
+ */
+export function FormPreview({ config }: { config: FormConfig }): JSX.Element {
+  const { t } = useTranslation();
+  const fields = config.form_fields.filter((f) => FIELD_TYPES[f.field_name]);
+  const byName = new Map(fields.map((f) => [f.field_name, f]));
+  const [defaults] = useState(() =>
+    initialValues(Object.keys(FIELD_TYPES), undefined, null, new URLSearchParams()),
+  );
+  const { register, control } = useForm<Values>({ defaultValues: defaults });
+  return (
+    <fieldset disabled className="min-w-0 space-y-4" aria-label={t('field_settings.preview')}>
+      <FormSections
+        sections={visibleSections(byName, String(defaults.currency))}
+        renderField={(f) => (
+          <Field
+            key={f.field_name}
+            field={f}
+            required={f.required}
+            register={register}
+            control={control}
+            onBeforeAddNew={() => undefined}
+          />
+        )}
+      />
+    </fieldset>
   );
 }
 
