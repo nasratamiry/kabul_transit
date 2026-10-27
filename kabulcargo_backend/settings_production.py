@@ -44,6 +44,10 @@ CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', cast=Csv())
 CORS_ALLOW_ALL_ORIGINS = False
 
+# Document files: Django checks login + branch, nginx sends the bytes from an `internal`
+# location (deploy/nginx-documents.conf). /media/ itself must not be public in production.
+DOCUMENT_X_ACCEL_PREFIX = config('DOCUMENT_X_ACCEL_PREFIX', default='/protected-media')
+
 # The browsable API is a developer tool; production serves JSON only.
 REST_FRAMEWORK = {**REST_FRAMEWORK, 'DEFAULT_RENDERER_CLASSES': ['rest_framework.renderers.JSONRenderer']}
 

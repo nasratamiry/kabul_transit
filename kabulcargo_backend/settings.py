@@ -145,6 +145,9 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+# Documents are served by /api/documents/<id>/download/ (authenticated, branch-checked). Empty:
+# Django streams the file. Production sets an nginx `internal` location prefix instead.
+DOCUMENT_X_ACCEL_PREFIX = config('DOCUMENT_X_ACCEL_PREFIX', default='')
 
 
 # ---------------------------------------------------------------------------

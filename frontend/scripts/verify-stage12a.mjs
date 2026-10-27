@@ -251,11 +251,14 @@ await step(7, 'Branch filter (super_admin)', async () => {
   await admin.goto(`${BASE}/transactions`);
 });
 
-await step(10, 'Row click → /transactions/:id/edit', async () => {
+// Since stage 12b a row opens the detail page; editing is its «ویرایش» button.
+await step(10, 'Row click → detail → «ویرایش» → /transactions/:id/edit', async () => {
   await waitRows(admin, (r) => r.length === 3);
   await admin.locator('tbody tr', { hasText: 'KC-1001' }).click();
+  await admin.waitForURL(`**/transactions/${tx.S1.id}`);
+  await admin.click('[data-testid=detail-edit]');
   await admin.waitForURL(`**/transactions/${tx.S1.id}/edit`);
-  check(10, 'Row click → /transactions/:id/edit', true, admin.url());
+  check(10, 'Row click → detail → «ویرایش» → /transactions/:id/edit', true, admin.url());
 });
 
 await step(25, 'Edit form is pre-filled', async () => {

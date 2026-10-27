@@ -63,13 +63,13 @@ export function Sidebar({ open, onClose }: SidebarProps): JSX.Element {
         aria-hidden
         onClick={onClose}
         className={cn(
-          'fixed inset-0 z-30 bg-black/40 transition-opacity lg:hidden',
+          'fixed inset-0 z-30 bg-black/40 transition-opacity lg:hidden print:hidden',
           open ? 'opacity-100' : 'pointer-events-none opacity-0',
         )}
       />
       <aside
         className={cn(
-          'fixed inset-y-0 start-0 z-40 flex w-64 flex-col border-e border-gray-200 bg-white transition-transform',
+          'fixed inset-y-0 start-0 z-40 flex w-64 flex-col border-e border-gray-200 bg-white transition-transform print:hidden',
           'dark:border-gray-700 dark:bg-gray-800',
           'lg:static lg:z-auto',
           // Off-canvas only below lg; the rtl:/ltr: variants would otherwise outrank lg:translate-x-0.

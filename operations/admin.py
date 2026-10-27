@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.urls import reverse
+from django.utils.html import format_html
 from django_jalali.admin.filters import JDateFieldListFilter
 from django_jalali.admin.widgets import AdminjDateWidget
 from django_jalali.db import models as jmodels
@@ -144,13 +146,21 @@ class TransactionAdmin(TodayRateRequiredAdminMixin, SimpleHistoryAdmin):
 
 @admin.register(Document)
 class DocumentAdmin(SimpleHistoryAdmin):
-    list_display = ('__str__', 'transaction', 'uploaded_by', 'uploaded_display')
+    list_display = ('__str__', 'transaction', 'uploaded_by', 'uploaded_display', 'download_link')
     list_filter = ('transaction__branch', 'transaction__trade_type')
     search_fields = ('title', 'transaction__serial_number', 'transaction__plate_afghan')
     list_select_related = ('transaction', 'uploaded_by')
     autocomplete_fields = ('transaction',)
-    readonly_fields = ('uploaded_by', 'uploaded_display')
-    fields = ('transaction', 'title', 'file', 'uploaded_by', 'uploaded_display')
+    readonly_fields = ('uploaded_by', 'uploaded_display', 'download_link')
+    fields = ('transaction', 'title', 'file', 'download_link', 'uploaded_by', 'uploaded_display')
+
+    @admin.display(description='باز کردن فایل')
+    def download_link(self, obj):
+        # In production /media/ is not public; the file is opened through the checked endpoint.
+        if not obj.pk:
+            return '—'
+        return format_html('<a href="{}" target="_blank" rel="noopener">باز کردن / دانلود</a>',
+                           reverse('document-download', args=[obj.pk]))
 
     @admin.display(description='تاریخ آپلود (شمسی | میلادی)', ordering='uploaded_at')
     def uploaded_display(self, obj):

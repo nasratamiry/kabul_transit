@@ -207,3 +207,38 @@ Windows a stopped `npm run dev` can leave vite running, and two servers can shar
 | 30  | preview-summary math (API)                                                       |
 | 31  | preview-summary for another branch → 403                                         |
 | E   | No uncaught page errors                                                          |
+
+---
+
+# Stage 12b — detail page, documents, USD equivalent, branch-manager rate
+
+```powershell
+cd "D:\Kabul Cargo TN\frontend"
+..\.venv\Scripts\python scripts\cleanup-stage12b.py --setup   # branches E2E12BA/E2E12BB, USD 60 (10 days ago) + 70 (today)
+node scripts/verify-stage12b.mjs ..\stage12b_screenshots     # also writes 02-print.pdf (A4)
+..\.venv\Scripts\python scripts\cleanup-stage12b.py           # rows, uploaded files on disk, history
+```
+
+| #   | Check                                                                                   |
+| --- | --------------------------------------------------------------------------------------- |
+| 1   | AFN transaction: USD at its own date’s USD rate (60), not today’s (70)                  |
+| 2   | List shows the USD profit of an AFN row                                                 |
+| 3   | Row click → detail: serial, trade badge, branch, dual date, status                      |
+| 4   | Money table: each line in AFN + USD; profit green/red                                   |
+| 5   | Read-only sections mirror the form                                                      |
+| 6   | Print view: A4 PDF, no topbar / sidebar / buttons, letterhead + signature lines         |
+| 7   | Upload a PDF and a PNG at once; listed with thumbnail                                   |
+| 8   | Client refuses 11 MB and an .exe renamed .jpg (no request sent)                         |
+| 9   | Server refuses the same files with its Dari message                                     |
+| 10  | No raw /media/ URL in the API; download works with the token, 401 without               |
+| 11  | Image opens in a lightbox, PDF in a new tab (blob)                                      |
+| 12  | Another branch’s manager: no documents listed, download 404, detail not available       |
+| 13  | «فقط دارای سند» filter (URL) and the document-count link to `#documents`                |
+| 14  | Delete a document (confirm)                                                             |
+| 15  | History timeline shows an edit (field, old → new, user, dual date)                      |
+| 16  | Branch manager: past-date rate / edit / delete → 403                                    |
+| 17  | No rate today → manager sees «ثبت نرخ امروز» on the list and the dashboard              |
+| 18  | 428 → manager enters today’s rate in the dialog → the blocked save is retried, succeeds |
+| 19  | Dashboard banner turns green                                                            |
+| 20  | Delete a transaction from its detail page (own branch); other branch → 404              |
+| E   | No uncaught page errors                                                                 |

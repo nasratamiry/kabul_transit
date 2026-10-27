@@ -1,4 +1,8 @@
+import mimetypes
+import os
+
 from rest_framework import serializers
+from rest_framework.reverse import reverse
 
 from operations.models import Document, Transaction
 
@@ -47,7 +51,35 @@ class TransactionSerializer(KabulModelSerializer):
 
 
 class DocumentSerializer(KabulModelSerializer):
+    """
+    The stored file is never exposed as a /media/ URL: in production nginx would serve that to
+    anyone holding the link. Files are read through download_url (authenticated, branch-checked).
+    `file` is write-only (upload) and keeps the model's size / extension / magic-bytes validators.
+    """
+    download_url = serializers.SerializerMethodField(label='نشانی دانلود')
+    file_name = serializers.SerializerMethodField(label='نام فایل')
+    file_size = serializers.SerializerMethodField(label='حجم فایل (بایت)')
+    content_type = serializers.SerializerMethodField(label='نوع فایل')
+    uploaded_by_name = serializers.CharField(source='uploaded_by.get_full_name', read_only=True, default=None)
+
     class Meta:
         model = Document
-        fields = ('id', 'transaction', 'file', 'title', 'uploaded_at', 'uploaded_by')
+        fields = ('id', 'transaction', 'file', 'title', 'uploaded_at', 'uploaded_by', 'uploaded_by_name',
+                  'download_url', 'file_name', 'file_size', 'content_type')
         read_only_fields = ('uploaded_at', 'uploaded_by')
+        extra_kwargs = {'file': {'write_only': True}}
+
+    def get_download_url(self, obj):
+        return reverse('document-download', args=[obj.pk])
+
+    def get_file_name(self, obj):
+        return os.path.basename(obj.file.name)
+
+    def get_file_size(self, obj):
+        try:
+            return obj.file.size
+        except (FileNotFoundError, OSError):
+            return None
+
+    def get_content_type(self, obj):
+        return mimetypes.guess_type(obj.file.name)[0] or 'application/octet-stream'

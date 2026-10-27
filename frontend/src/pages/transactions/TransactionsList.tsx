@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { TodayRateDialog } from '@/components/finance/TodayRateDialog';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -25,14 +26,9 @@ import { TRADE_TYPES, TX_KEY } from '@/lib/transactionSections';
 import { useAuth } from '@/stores/auth';
 import type { Branch, Paginated, Transaction } from '@/types/api';
 
-const PAGE_SIZE = 25;
+import { TRADE_TONE } from './tradeTone';
 
-const TRADE_TONE: Record<string, string> = {
-  IMPORT: 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200',
-  EXPORT: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200',
-  TRANSIT: 'bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-200',
-  TIR_CARNET: 'bg-amber-100 text-amber-900 dark:bg-amber-900/50 dark:text-amber-200',
-};
+const PAGE_SIZE = 25;
 
 /** Filter state lives in the URL (bookmarks and the back button work); empty = default. */
 const FILTERS = [
@@ -43,6 +39,7 @@ const FILTERS = [
   'trader',
   'transport_company',
   'search',
+  'has_documents',
 ];
 
 export function TransactionsList(): JSX.Element {
@@ -53,6 +50,7 @@ export function TransactionsList(): JSX.Element {
   const isSuperAdmin = useAuth((s) => s.user?.role === 'super_admin');
   const [params, setParams] = useSearchParams();
   const month = currentShamsiMonth();
+  const [rateDialog, setRateDialog] = useState(false);
 
   const get = (k: string): string => params.get(k) ?? '';
   const dateFrom = get('date_from') || month.from;
@@ -99,6 +97,7 @@ export function TransactionsList(): JSX.Element {
     trader: get('trader') || undefined,
     transport_company: get('transport_company') || undefined,
     search: get('search') || undefined,
+    has_documents: get('has_documents') || undefined,
     page,
     page_size: PAGE_SIZE,
   };
@@ -188,6 +187,16 @@ export function TransactionsList(): JSX.Element {
             )}
           >
             {formatMoney(r.row_summary.profit_or_loss_afn, 'AFN', i18n.language)}
+            {/* USD at the USD rate of the row's own date (also for AFN rows since stage 12b) */}
+            <span
+              className="block text-xs font-normal text-gray-500"
+              dir="ltr"
+              data-testid="profit-usd"
+            >
+              {r.row_summary.profit_or_loss_usd === null
+                ? '$ —'
+                : formatMoney(r.row_summary.profit_or_loss_usd, 'USD', i18n.language)}
+            </span>
           </span>
         );
       },
@@ -197,10 +206,16 @@ export function TransactionsList(): JSX.Element {
       header: t('transactions.documents'),
       align: 'center',
       cell: (r) => (
-        <span className="inline-flex items-center gap-1 text-gray-600 dark:text-gray-300">
+        <Link
+          to={`/transactions/${r.id}#documents`}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`${t('transactions.documents')}: ${d(r.documents_count)}`}
+          className="inline-flex items-center gap-1 rounded px-1 text-gray-600 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:text-gray-300"
+          data-testid="documents-link"
+        >
           <FileText className="h-3.5 w-3.5" aria-hidden />
           {d(r.documents_count)}
-        </span>
+        </Link>
       ),
     },
     {
@@ -244,13 +259,20 @@ export function TransactionsList(): JSX.Element {
                 data-testid="no-rate-hint"
               >
                 {t('transactions.no_rate_today_tooltip')}
-                {isSuperAdmin && (
-                  <>
-                    {' — '}
-                    <Link to="/admin/exchange-rates/new" className="font-medium underline">
-                      {t('transactions.set_rate_link')}
-                    </Link>
-                  </>
+                {' — '}
+                {isSuperAdmin ? (
+                  <Link to="/admin/exchange-rates/new" className="font-medium underline">
+                    {t('transactions.set_rate_link')}
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setRateDialog(true)}
+                    className="font-medium underline"
+                    data-testid="open-rate-dialog"
+                  >
+                    {t('transactions.set_rate_link')}
+                  </button>
                 )}
               </p>
             )}
@@ -312,6 +334,17 @@ export function TransactionsList(): JSX.Element {
           aria-label={t('transactions.transport_company')}
           data-testid="filter-company"
         />
+        <Select
+          value={get('has_documents')}
+          onChange={(e) => setFilter('has_documents', e.target.value)}
+          aria-label={t('transactions.documents_filter')}
+          placeholder={t('transactions.documents_any')}
+          options={[
+            { value: 'true', label: t('transactions.documents_only') },
+            { value: 'false', label: t('transactions.documents_none') },
+          ]}
+          data-testid="filter-documents"
+        />
         <div className="relative">
           <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <Input
@@ -342,7 +375,7 @@ export function TransactionsList(): JSX.Element {
         columns={columns}
         rows={list.data?.results}
         rowKey={(r) => r.id}
-        onRowClick={(r) => navigate(`/transactions/${r.id}/edit`)}
+        onRowClick={(r) => navigate(`/transactions/${r.id}`)}
         isLoading={list.isFetching && !list.data}
         caption={t('transactions.title')}
         // kc-row-highlight is a stable marker for tests, next to the visible colour.
@@ -368,6 +401,7 @@ export function TransactionsList(): JSX.Element {
         total={list.data?.count ?? 0}
         onPage={(p) => setFilter('page', p === 1 ? null : p)}
       />
+      <TodayRateDialog open={rateDialog} onClose={() => setRateDialog(false)} />
     </>
   );
 }

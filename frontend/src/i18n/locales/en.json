@@ -237,7 +237,9 @@
     "all_currencies": "All currencies",
     "rate_invalid": "A positive number with at most 8 decimals",
     "future_date": "Future dates are not allowed",
-    "range_invalid": "“From” is after “To”"
+    "range_invalid": "“From” is after “To”",
+    "today_dialog_title": "Enter today’s rate",
+    "today_only_note": "A branch manager can enter today’s rate only; a saved rate cannot be edited or deleted."
   },
   "statement_lines": {
     "title": "Statement lines",
@@ -401,9 +403,15 @@
     "integer_invalid": "A whole number, 0 or more",
     "rate_invalid": "A positive rate, at most 8 decimals",
     "draft_restored": "What you typed earlier has been restored.",
-    "documents_only_note": "The “with documents only” filter comes in stage 12b (the API has no such filter yet).",
     "filters": "Filters",
-    "page_info": "Page {{page}}"
+    "page_info": "Page {{page}}",
+    "delete_title": "Delete transaction {{serial}}?",
+    "delete_message": "The transaction and all its documents are deleted for good. The change history stays.",
+    "deleted": "Transaction {{serial}} deleted",
+    "documents_filter": "Documents",
+    "documents_any": "Documents: all",
+    "documents_only": "With documents only",
+    "documents_none": "Without documents"
   },
   "sections": {
     "identity": "Identity",
@@ -478,5 +486,44 @@
     "seal_expense": "Seal",
     "scale_ticket_expense": "Scale ticket",
     "gate_ticket_expense": "Gate ticket"
+  },
+  "detail": {
+    "crumb": "Details",
+    "title": "Transaction",
+    "printed_on": "Printed",
+    "print": "Print",
+    "money": "Amounts",
+    "item": "Item",
+    "revenue": "the only revenue",
+    "rate_afn": "The transaction is in AFN.",
+    "rate_line": "Rate of this transaction: 1 {{currency}} = {{rate}} AFN",
+    "usd_rate_line": "USD rate of the transaction date: {{rate}} AFN",
+    "sign_prepared": "Prepared by",
+    "sign_checked": "Checked by",
+    "sign_approved": "Approved by"
+  },
+  "documents": {
+    "title": "Documents",
+    "drop_hint": "Drag and drop files here, or choose them",
+    "choose": "Choose files",
+    "limits": "PDF, JPG, PNG or WEBP — up to {{mb}} MB each",
+    "too_large": "The file is larger than {{mb}} MB.",
+    "bad_type": "File type not allowed. Only PDF, JPG, PNG and WEBP.",
+    "content_mismatch": "The file content does not match its type. The file is broken or forged.",
+    "uploaded": "“{{name}}” uploaded",
+    "open": "Open",
+    "download": "Download",
+    "delete_title": "Delete document “{{name}}”?",
+    "delete_message": "The file is deleted for good.",
+    "deleted": "Document deleted",
+    "empty": "No documents uploaded yet.",
+    "thumb_failed": "Preview failed"
+  },
+  "history": {
+    "title": "Change history",
+    "empty": "No history",
+    "by": "by",
+    "initial": "First version",
+    "no_changes": "No field changes"
   }
 }

@@ -1,12 +1,13 @@
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, viewsets
 
+from api.history import HistoryMixin
 from api.permissions import IsBranchStaff
 from api.serializers import TraderSerializer, TransportCompanySerializer
 from partners.models import Trader, TransportCompany
 
 
-class TraderViewSet(viewsets.ModelViewSet):
+class TraderViewSet(HistoryMixin, viewsets.ModelViewSet):
     """Shared by every branch — not port-scoped."""
     branch_field = None
     queryset = Trader.objects.all()
@@ -17,7 +18,7 @@ class TraderViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'company_name', 'phone', 'national_id']
 
 
-class TransportCompanyViewSet(viewsets.ModelViewSet):
+class TransportCompanyViewSet(HistoryMixin, viewsets.ModelViewSet):
     """Shared by every branch — not port-scoped."""
     branch_field = None
     queryset = TransportCompany.objects.all()

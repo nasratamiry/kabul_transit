@@ -11,6 +11,7 @@ import { Traders } from '@/pages/partners/Traders';
 import { TransportCompanies } from '@/pages/partners/TransportCompanies';
 import { NotFound } from '@/pages/NotFound';
 import { TradeTypePicker } from '@/pages/transactions/TradeTypePicker';
+import { TransactionDetail } from '@/pages/transactions/TransactionDetail';
 import { TransactionForm } from '@/pages/transactions/TransactionForm';
 import { TransactionsList } from '@/pages/transactions/TransactionsList';
 
@@ -58,6 +59,7 @@ export const router = createBrowserRouter([
             element: <TransactionForm />,
             handle: crumb('common.add'),
           },
+          { path: ':id', element: <TransactionDetail />, handle: crumb('detail.crumb') },
           { path: ':id/edit', element: <TransactionForm />, handle: crumb('common.edit') },
         ],
       },

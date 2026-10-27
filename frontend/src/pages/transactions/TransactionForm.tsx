@@ -16,6 +16,7 @@ import {
 } from 'react-router-dom';
 import { z } from 'zod';
 
+import { TodayRateDialog } from '@/components/finance/TodayRateDialog';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -283,6 +284,7 @@ function FormBody({ config, tx, branch, tradeType }: FormBodyProps): JSX.Element
     defaultValues: initialValues(names, tx, draft, params),
   });
   const [rateMissing, setRateMissing] = useState(false);
+  const [rateDialog, setRateDialog] = useState(false);
 
   // Announce a restored draft once; drop the «new partner» params once they are applied.
   const announced = useRef(false);
@@ -394,12 +396,21 @@ function FormBody({ config, tx, branch, tradeType }: FormBodyProps): JSX.Element
           {t('summary.missing_today_rate_body')}
         </p>
         <div className="flex flex-wrap justify-center gap-3">
-          {isSuperAdmin && (
+          {isSuperAdmin ? (
             <Link to="/admin/exchange-rates/new" data-testid="rate-missing-cta">
               <Button size="lg" className="bg-red-600 hover:bg-red-700">
                 {t('summary.missing_today_rate_cta')}
               </Button>
             </Link>
+          ) : (
+            <Button
+              size="lg"
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => setRateDialog(true)}
+              data-testid="rate-missing-cta"
+            >
+              {t('summary.missing_today_rate_cta')}
+            </Button>
           )}
           <Button
             size="lg"
@@ -410,6 +421,15 @@ function FormBody({ config, tx, branch, tradeType }: FormBodyProps): JSX.Element
             {t('summary.back_to_form')}
           </Button>
         </div>
+        {/* A branch manager enters today's rate here; the blocked save is then retried at once. */}
+        <TodayRateDialog
+          open={rateDialog}
+          onClose={() => setRateDialog(false)}
+          onSaved={() => {
+            setRateMissing(false);
+            void handleSubmit(onSubmit)();
+          }}
+        />
       </div>
     );
   }

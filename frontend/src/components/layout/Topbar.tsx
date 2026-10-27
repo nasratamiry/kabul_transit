@@ -19,7 +19,7 @@ export function Topbar({ onMenu }: { onMenu(): void }): JSX.Element {
   const { theme, toggle } = useTheme();
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-gray-200 bg-white px-4 dark:border-gray-700 dark:bg-gray-800">
+    <header className="sticky top-0 z-20 print:hidden flex h-16 items-center gap-3 border-b border-gray-200 bg-white px-4 dark:border-gray-700 dark:bg-gray-800">
       <button
         type="button"
         onClick={onMenu}

@@ -117,6 +117,31 @@ export interface Transaction {
   [field: string]: unknown;
 }
 
+/** DocumentSerializer — the file itself is only reachable through download_url (authenticated). */
+export interface TxDocument {
+  id: number;
+  transaction: number;
+  title: string;
+  uploaded_at: string;
+  uploaded_by: number | null;
+  uploaded_by_name: string | null;
+  /** '/api/documents/<id>/download/' — add ?download=1 for an attachment. */
+  download_url: string;
+  file_name: string;
+  file_size: number | null;
+  content_type: string;
+}
+
+/** GET <resource>/<id>/history/ (api/history.py) — newest first, changed fields only. */
+export interface HistoryEntry {
+  history_id: number;
+  type: string;
+  /** 'Shamsi | Gregorian' */
+  date: string;
+  user: string | null;
+  changes: { field: string; label: string; old: string | null; new: string | null }[];
+}
+
 /** GET /api/form-config/ — hidden fields are already left out, sorted by sort_order. */
 export interface FormConfig {
   branch: number;
@@ -134,6 +159,8 @@ export interface FormConfig {
 /** POST /api/transactions/preview-summary/ */
 export interface PreviewSummary {
   currency: Transaction['currency'];
+  /** Shamsi date the USD figures were computed for. */
+  date: string;
   customer_payment_afn: string;
   total_expense_afn: string;
   profit_or_loss_afn: string;

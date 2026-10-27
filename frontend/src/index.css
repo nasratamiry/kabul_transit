@@ -24,3 +24,21 @@ body {
 .digits-fa {
   font-feature-settings: 'ss01';
 }
+
+/* Printing (transaction detail): A4, black on white whatever the screen theme. */
+@page {
+  size: A4;
+  margin: 14mm 12mm;
+}
+@media print {
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  html.dark * {
+    color: #000 !important;
+    background-color: transparent !important;
+    border-color: #999 !important;
+  }
+}

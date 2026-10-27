@@ -175,13 +175,18 @@ class Transaction(models.Model):
     def fee_per_dollar_afn(self):
         """
         فی دالر — how many AFN one USD is worth for this record.
-        For USD records this is the record's own rate. For other currencies the
-        day's USD rate will come from finance.ExchangeRate (later stage); until
-        then it is unknown and the USD figures are None.
+        For USD records this is the record's own rate. For other currencies it is the
+        USD rate of the record's own date (else the latest earlier one; never today's) —
+        the income statement's rule, finance.utils.usd_rate_on. None (USD figures unknown)
+        when no USD rate exists on or before that date. Lists preload it for all rows with
+        finance.utils.attach_usd_rates; a single record looks it up once and keeps it.
         """
         if self.currency == self.Currency.USD:
             return Decimal(self.exchange_rate)
-        return None
+        if not hasattr(self, '_usd_rate'):
+            from finance.utils import usd_rate_on  # finance.models imports this module
+            self._usd_rate = usd_rate_on(self.date) if self.date else None
+        return self._usd_rate
 
     @property
     def total_expense_usd(self):

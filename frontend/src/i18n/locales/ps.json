@@ -237,7 +237,9 @@
     "all_currencies": "ټولې اسعار",
     "rate_invalid": "نرخ مثبت عدد وي، تر ۸ اعشاري رقمونو",
     "future_date": "راتلونکې نېټه نه منل کېږي",
-    "range_invalid": "«له نېټې» له «تر نېټې» وروسته ده"
+    "range_invalid": "«له نېټې» له «تر نېټې» وروسته ده",
+    "today_dialog_title": "د نن نرخ ثبتول",
+    "today_only_note": "د بندر مدیر یوازې د نن نرخ ثبتولی شي؛ ثبت شوی نرخ نه سمېږي او نه ړنګېږي."
   },
   "statement_lines": {
     "title": "د عاید راپور کرښې",
@@ -401,9 +403,15 @@
     "integer_invalid": "یو بشپړ عدد، ۰ یا ډېر",
     "rate_invalid": "مثبت نرخ، تر ۸ اعشاري رقمونو",
     "draft_restored": "مخکې لیکل شوي معلومات بیرته راغلل.",
-    "documents_only_note": "«یوازې له سند سره» فیلتر په ۱۲ب پړاو کې راځي (API لا دا فیلتر نه لري).",
     "filters": "فیلترونه",
-    "page_info": "{{page}} پاڼه"
+    "page_info": "{{page}} پاڼه",
+    "delete_title": "د {{serial}} معامله ړنګه شي؟",
+    "delete_message": "معامله او ټول اسناد یې د تل لپاره ړنګېږي. د بدلونونو تاریخچه پاتې کېږي.",
+    "deleted": "د {{serial}} معامله ړنګه شوه",
+    "documents_filter": "اسناد",
+    "documents_any": "اسناد: ټول",
+    "documents_only": "یوازې له سند سره",
+    "documents_none": "بې سنده"
   },
   "sections": {
     "identity": "پېژندنه",
@@ -478,5 +486,44 @@
     "seal_expense": "د سیم سرغچ مبلغ",
     "scale_ticket_expense": "د ترازو ټکټ",
     "gate_ticket_expense": "د دروازې ټکټ"
+  },
+  "detail": {
+    "crumb": "جزئیات",
+    "title": "معامله",
+    "printed_on": "د چاپ نېټه",
+    "print": "چاپ",
+    "money": "مبلغونه",
+    "item": "شرح",
+    "revenue": "یوازینی عاید",
+    "rate_afn": "معامله په افغانیو ده.",
+    "rate_line": "د دې معاملې نرخ: ۱ {{currency}} = {{rate}} ؋",
+    "usd_rate_line": "د معاملې د نېټې د ډالر نرخ: {{rate}} ؋",
+    "sign_prepared": "چمتو کوونکی",
+    "sign_checked": "کتونکی",
+    "sign_approved": "تاییدوونکی"
+  },
+  "documents": {
+    "title": "اسناد",
+    "drop_hint": "فایلونه دلته راکاږئ او پرېږدئ، یا یې وټاکئ",
+    "choose": "فایل ټاکل",
+    "limits": "PDF، JPG، PNG یا WEBP — هر فایل تر {{mb}} میګابایټه",
+    "too_large": "د فایل حجم له {{mb}} میګابایټه زیات دی.",
+    "bad_type": "د فایل ډول اجازه نه لري. یوازې PDF، JPG، PNG او WEBP منل کېږي.",
+    "content_mismatch": "د فایل منځپانګه له ډول سره سمون نه لري. فایل خراب یا جعلي دی.",
+    "uploaded": "«{{name}}» پورته شو",
+    "open": "پرانیستل",
+    "download": "ښکته کول",
+    "delete_title": "سند «{{name}}» ړنګ شي؟",
+    "delete_message": "فایل د تل لپاره ړنګېږي.",
+    "deleted": "سند ړنګ شو",
+    "empty": "لا هېڅ سند نه دی پورته شوی.",
+    "thumb_failed": "مخکتنه پرانیستل نه شوه"
+  },
+  "history": {
+    "title": "د بدلونونو تاریخچه",
+    "empty": "تاریخچه نشته",
+    "by": "له خوا",
+    "initial": "لومړی ثبت",
+    "no_changes": "په ساحو کې بدلون نشته"
   }
 }

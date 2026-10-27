@@ -6,7 +6,6 @@ IAS 1 (light) income statement, by function of expense:
 
 Pure functions, no HTTP. Amounts are Decimal strings with 2 places.
 """
-import bisect
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -17,7 +16,7 @@ from accounts.models import Branch
 from operations.models import Transaction
 
 from .models import SPECIAL_SOURCES, ExchangeRate, Hawala, OfficeExpense, StatementLine
-from .utils import kabul_today
+from .utils import UsdRateTable, kabul_today
 
 SECTION_ORDER = [StatementLine.Section.REVENUE, StatementLine.Section.COGS,
                  StatementLine.Section.OPEX, StatementLine.Section.OTHER]
@@ -51,24 +50,6 @@ class _Amount:
     def combine(self, other, sign=1):
         self.add(None if other.afn is None else sign * other.afn, None if other.usd is None else sign * other.usd)
         return self
-
-
-class _UsdRates:
-    """USD→AFN rate per date: that day's rate, else the most recent earlier one. Never today's rate."""
-
-    def __init__(self, until):
-        rows = list(ExchangeRate.objects.filter(currency=USD, date__lte=until)
-                    .order_by('date').values_list('date', 'rate'))
-        self.dates = [row[0] for row in rows]
-        self.rates = [row[1] for row in rows]
-        self.missing_dates = set()
-
-    def on(self, day):
-        index = bisect.bisect_right(self.dates, day) - 1
-        if index < 0:
-            self.missing_dates.add(str(day))
-            return None
-        return self.rates[index]
 
 
 def _fallback_rate(day, currency):
@@ -161,7 +142,7 @@ def income_statement(branch_id=None, date_from=None, date_to=None):
     warnings = []
 
     lines = list(StatementLine.objects.filter(is_active=True))
-    usd_rates = _UsdRates(until=date_to)
+    usd_rates = UsdRateTable(until=date_to)
     field_sources = [line.source_field for line in lines if line.source_field not in SPECIAL_SOURCES]
     special_sources = [line.source_field for line in lines if line.source_field in SPECIAL_SOURCES]
     amounts, transaction_count = _transaction_amounts(field_sources, period, branch_id, usd_rates)

@@ -1,12 +1,14 @@
 from django_filters.rest_framework import DjangoFilterBackend, FilterSet
 from rest_framework import filters, viewsets
+from rest_framework.exceptions import PermissionDenied
 
 from api.filters import ShamsiDateFilter
+from api.history import HistoryMixin
 from api.mixins import PortScopedQuerysetMixin, own_branch_kwargs
-from api.permissions import IsBranchStaff
+from api.permissions import IsBranchStaff, IsSuperAdmin
 from api.serializers import ExchangeRateSerializer, HawalaSerializer, OfficeExpenseSerializer
 from finance.models import ExchangeRate, Hawala, OfficeExpense
-from finance.utils import require_todays_usd_rate
+from finance.utils import kabul_today, require_todays_usd_rate
 
 
 class ExchangeRateFilter(FilterSet):
@@ -34,7 +36,11 @@ class OfficeExpenseFilter(FilterSet):
 
 
 class ExchangeRateViewSet(viewsets.ModelViewSet):
-    """Not port-scoped: rates are company-wide."""
+    """
+    Not port-scoped: rates are company-wide. Super admin: full control. Branch manager: reads,
+    and may create TODAY's rate only (any currency the model allows) — no past or future
+    dates, no edit, no delete.
+    """
     branch_field = None
     queryset = ExchangeRate.objects.select_related('created_by')
     serializer_class = ExchangeRateSerializer
@@ -43,11 +49,19 @@ class ExchangeRateViewSet(viewsets.ModelViewSet):
     filterset_class = ExchangeRateFilter
     ordering = ['-date', 'currency']
 
+    def get_permissions(self):
+        if self.action in ('update', 'partial_update', 'destroy'):
+            return [IsSuperAdmin()]
+        return super().get_permissions()
+
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        user = self.request.user
+        if user.is_branch_manager and serializer.validated_data.get('date', kabul_today()) != kabul_today():
+            raise PermissionDenied('مدیر بندر فقط نرخ امروز را ثبت کرده می‌تواند.')
+        serializer.save(created_by=user)
 
 
-class HawalaViewSet(PortScopedQuerysetMixin, viewsets.ModelViewSet):
+class HawalaViewSet(HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = Hawala.objects.select_related('branch', 'created_by')
     serializer_class = HawalaSerializer
     permission_classes = [IsBranchStaff]
@@ -65,7 +79,7 @@ class HawalaViewSet(PortScopedQuerysetMixin, viewsets.ModelViewSet):
         serializer.save(**own_branch_kwargs(self.request.user))
 
 
-class OfficeExpenseViewSet(PortScopedQuerysetMixin, viewsets.ModelViewSet):
+class OfficeExpenseViewSet(HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = OfficeExpense.objects.select_related('branch', 'created_by')
     serializer_class = OfficeExpenseSerializer
     permission_classes = [IsBranchStaff]

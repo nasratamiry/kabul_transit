@@ -18,7 +18,7 @@ export function AppShell(): JSX.Element {
       <div className="flex flex-1">
         <Sidebar open={menuOpen} onClose={() => setMenuOpen(false)} />
         <main className="min-w-0 flex-1">
-          <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8 print:max-w-none print:p-0">
             <Breadcrumbs />
             <Outlet />
           </div>
@@ -36,7 +36,10 @@ function Breadcrumbs(): JSX.Element {
     .filter((c): c is { path: string; crumb: string; link?: false } => Boolean(c.crumb));
 
   return (
-    <nav aria-label="breadcrumb" className="mb-5 text-sm text-gray-500 dark:text-gray-400">
+    <nav
+      aria-label="breadcrumb"
+      className="mb-5 text-sm text-gray-500 dark:text-gray-400 print:hidden"
+    >
       <ol className="flex flex-wrap items-center gap-1.5">
         {crumbs.map((c, i) => (
           <Fragment key={c.path}>

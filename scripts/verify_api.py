@@ -24,7 +24,9 @@ django.setup()
 
 from axes.models import AccessAttempt  # noqa: E402
 from django.core.files.uploadedfile import SimpleUploadedFile  # noqa: E402
-from django.db import transaction  # noqa: E402
+from django.db import connection, transaction  # noqa: E402
+from django.test import TestCase  # noqa: E402
+from django.test.utils import CaptureQueriesContext, override_settings  # noqa: E402
 from rest_framework.test import APIClient  # noqa: E402
 from rest_framework_simplejwt.tokens import AccessToken  # noqa: E402
 
@@ -76,6 +78,8 @@ class Rollback(Exception):
 
 
 before = counts()
+stored_documents = []
+open_responses = []
 today = kabul_today()
 tomorrow = today + timedelta(days=1)
 
@@ -336,7 +340,8 @@ try:
         check('preview-summary: «عواید ترانسپورت» مصرف حساب می‌شود؛ ورودی خراب = ۰؛ دالری با نرخ خودش',
               preview.status_code == 200 and preview.data['customer_payment_afn'] == '10000.00'
               and preview.data['total_expense_afn'] == '5000.00' and preview.data['profit_or_loss_afn'] == '5000.00'
-              and preview.data['profit_or_loss_usd'] is None
+              and preview.data['profit_or_loss_usd'] == str((Decimal('5000') / Decimal(preview.data['fee_per_dollar_afn']))
+                                                           .quantize(Decimal('0.01')))
               and usd.data['profit_or_loss_afn'] == '4900.00' and usd.data['profit_or_loss_usd'] == '70.00'
               and Transaction.objects.count() == counts_tx,
               f'afn={preview.data}, usd={usd.data}')
@@ -353,9 +358,141 @@ try:
               paged.status_code == 200 and isinstance(paged.data, dict) and len(paged.data['results']) == 1
               and paged.data['count'] >= 2 and paged.data['next'], f'data keys={list(getattr(paged, "data", {}) or {})}')
 
+        print('ک) معادل دالری، اسناد، فیلتر، تاریخچه، نرخ مدیر بندر، حذف')
+        # 1.1 — an AFN transaction uses the USD rate of ITS date (else the latest earlier one), never today's
+        day = today - timedelta(days=20)
+        ExchangeRate.objects.filter(currency='USD', date__lt=today).delete()
+        ExchangeRate.objects.create(date=day - timedelta(days=2), currency='USD', rate=Decimal('68'))
+        ExchangeRate.objects.update_or_create(date=today, currency='USD', defaults={'rate': Decimal('80')})
+        old_afn = Transaction.objects.create(branch=branch_a, trade_type='EXPORT', serial_number='ZZ-USD-1',
+                                             currency='AFN', date=day, customer_payment=Decimal('6800'),
+                                             tariff_expense=Decimal('1360'))
+        no_rate = Transaction.objects.create(branch=branch_a, trade_type='EXPORT', serial_number='ZZ-USD-0',
+                                             currency='AFN', date=day - timedelta(days=30),
+                                             customer_payment=Decimal('100'))
+        summary = client_a.get(f'/api/transactions/{old_afn.id}/').data['row_summary']
+        none_summary = client_a.get(f'/api/transactions/{no_rate.id}/').data['row_summary']
+        check('معاملهٔ افغانی: معادل دالری با نرخ دالرِ تاریخ خودش (۶۸، نه نرخ امروز ۸۰)؛ بی‌نرخ → None',
+              summary['fee_per_dollar_afn'] == '68.00000000' and summary['profit_or_loss_usd'] == '80.00'
+              and summary['total_expense_usd'] == '20.00' and none_summary['profit_or_loss_usd'] is None,
+              f'{summary} | {none_summary}')
+
+        def list_queries(page_size):
+            with CaptureQueriesContext(connection) as ctx:
+                response = client_a.get('/api/transactions/', {'page_size': page_size, 'date_from': str(day - timedelta(days=40))})
+            return len(ctx.captured_queries), len(response.data['results'])
+        Transaction.objects.bulk_create([
+            Transaction(branch=branch_a, trade_type='IMPORT', serial_number=f'ZZ-Q-{i}', currency='AFN',
+                        date=day + timedelta(days=i % 15), customer_payment=Decimal('10'), balance=Decimal('10'))
+            for i in range(30)])
+        small, small_rows = list_queries(3)
+        big, big_rows = list_queries(30)
+        check('فهرست معاملات: تعداد queryها با تعداد ردیف‌ها بالا نمی‌رود (بدون N+1 برای نرخ دالر)',
+              small == big and big_rows == 30 and small_rows == 3, f'3 rows → {small} queries, 30 rows → {big} queries')
+
+        # 1.2 — documents: authenticated, branch-checked download; no raw /media/ URL
+        png = (b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00'
+               b'\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00'
+               b'\x00\x00\x00IEND\xaeB`\x82')
+        upload = client_a.post('/api/documents/', {'transaction': tx_a.id, 'title': 'بارنامه',
+                                                    'file': SimpleUploadedFile('بارنامهٔ تورخم.png', png)},
+                               format='multipart')
+        doc = Document.objects.filter(pk=upload.data.get('id')).first() if upload.status_code == 201 else None
+        listed = client_a.get('/api/documents/', {'transaction': tx_a.id})
+        body = str(upload.data) + str(listed.data)
+        check('سند آپلود شد؛ پاسخ API هیچ نشانی خام /media/ ندارد، فقط download_url',
+              doc is not None and '/media/' not in body and upload.data['download_url'] == f'/api/documents/{doc.id}/download/'
+              and upload.data['content_type'] == 'image/png' and 'file' not in upload.data,
+              f'status={upload.status_code}, keys={sorted(upload.data)}')
+        if doc:
+            stored_documents.append(doc.file.name)
+            own = client_a.get(f'/api/documents/{doc.id}/download/')
+            content = b''.join(own.streaming_content) if own.status_code == 200 else b''
+            attach = client_a.get(f'/api/documents/{doc.id}/download/', {'download': '1'})
+            other = client_b.get(f'/api/documents/{doc.id}/download/')
+            anon = APIClient(HTTP_HOST='127.0.0.1').get(f'/api/documents/{doc.id}/download/')
+            # A FileResponse keeps its file open until closed (Windows cannot delete it then), but
+            # response.close() fires request_finished, which closes the DB connection: close them
+            # only after the rolled-back transaction (see `finally`).
+            open_responses.extend([own, attach])
+            check('دانلود: بندر خودش ۲۰۰ (همان بایت‌ها، نوع درست، نام دری)؛ بندر دیگر ۴۰۴؛ بدون توکن ۴۰۱',
+                  own.status_code == 200 and content == png and own['Content-Type'] == 'image/png'
+                  and "filename*=utf-8''" in own['Content-Disposition'] and own['Content-Disposition'].startswith('inline')
+                  and attach['Content-Disposition'].startswith('attachment')
+                  and other.status_code == 404 and anon.status_code == 401,
+                  f"own={own.status_code} {own.get('Content-Disposition')}, other={other.status_code}, anon={anon.status_code}")
+            with override_settings(DOCUMENT_X_ACCEL_PREFIX='/protected-media'):
+                accel = client_a.get(f'/api/documents/{doc.id}/download/')
+            check('production: X-Accel-Redirect به محل internal nginx (Django فایل را نمی‌فرستد)',
+                  accel.status_code == 200 and accel['X-Accel-Redirect'].startswith('/protected-media/documents/')
+                  and not getattr(accel, 'streaming', False) and accel.content == b'',
+                  accel.get('X-Accel-Redirect', ''))
+
+        # 1.3 — has_documents filter
+        with_docs = [r['id'] for r in results(client_a.get('/api/transactions/', {'has_documents': 'true', 'page_size': 200, 'date_from': str(day - timedelta(days=60))}))]
+        without = [r['id'] for r in results(client_a.get('/api/transactions/', {'has_documents': 'false', 'page_size': 200, 'date_from': str(day - timedelta(days=60))}))]
+        check('فیلتر has_documents: true فقط معاملهٔ سنددار، false بقیه',
+              with_docs == [tx_a.id] and tx_a.id not in without and old_afn.id in without, f'true={with_docs}, false={len(without)}')
+
+        # 1.4 — history endpoint (changed fields only), branch-scoped
+        client_a.patch(f'/api/transactions/{old_afn.id}/', {'customer_payment': '7000', 'branch': branch_a.id}, format='json')
+        history = client_a.get(f'/api/transactions/{old_afn.id}/history/')
+        newest = history.data[0] if history.status_code == 200 and history.data else {}
+        trader_history = admin_client.get(f'/api/traders/{trader.id}/history/')
+        hidden = client_b.get(f'/api/transactions/{old_afn.id}/history/')
+        check('تاریخچهٔ معامله: فقط فیلد تغییرکرده (پرداخت مشتری 6800 → 7000) با کاربر و تاریخ دوگانه؛ بندر دیگر ۴۰۴؛ تاجر هم دارد',
+              history.status_code == 200 and len(history.data) == 2 and newest.get('user') == manager_a.username
+              and newest.get('changes') == [{'field': 'customer_payment', 'label': 'پرداخت مشتری', 'old': '6800.00', 'new': '7000.00'}]
+              and history.data[-1]['changes'] == [] and ' | ' in newest.get('date', '')
+              and hidden.status_code == 404 and trader_history.status_code == 200,
+              f"{history.status_code} {newest} | other={hidden.status_code} trader={trader_history.status_code}")
+
+        # 1.5 — branch manager: today's rate only; no past / future, no edit, no delete
+        today_eur = client_a.post('/api/exchange-rates/', {'date': str(today), 'currency': 'EUR', 'rate': '82'}, format='json')
+        no_date = client_a.post('/api/exchange-rates/', {'currency': 'PKR', 'rate': '0.25'}, format='json')
+        past = client_a.post('/api/exchange-rates/', {'date': str(today - timedelta(days=1)), 'currency': 'IRR', 'rate': '0.0016'}, format='json')
+        rate_id = today_eur.data.get('id') if today_eur.status_code == 201 else None
+        patch = client_a.patch(f'/api/exchange-rates/{rate_id}/', {'rate': '90'}, format='json')
+        delete = client_a.delete(f'/api/exchange-rates/{rate_id}/')
+        admin_past = admin_client.post('/api/exchange-rates/', {'date': str(today - timedelta(days=1)), 'currency': 'IRR', 'rate': '0.0016'}, format='json')
+        admin_delete = admin_client.delete(f'/api/exchange-rates/{rate_id}/')
+        check('نرخ: مدیر بندر نرخ امروز می‌سازد (۲۰۱)؛ تاریخ گذشته / ویرایش / حذف ۴۰۳؛ سوپر ادمین هر سه را می‌تواند',
+              today_eur.status_code == 201 and no_date.status_code == 201 and past.status_code == 403
+              and patch.status_code == 403 and delete.status_code == 403
+              and admin_past.status_code == 201 and admin_delete.status_code == 204,
+              f'today={today_eur.status_code}, no-date={no_date.status_code}, past={past.status_code}, patch={patch.status_code}, '
+              f'delete={delete.status_code}, admin past={admin_past.status_code}, admin delete={admin_delete.status_code}')
+
+        # 1.6 — who may delete a transaction (documented, unchanged): manager own branch yes, other branch no
+        throwaway = Transaction.objects.create(branch=branch_a, trade_type='IMPORT', serial_number='ZZ-DEL-1')
+        other_branch = client_b.delete(f'/api/transactions/{throwaway.id}/')
+        own_branch = client_a.delete(f'/api/transactions/{throwaway.id}/')
+        check('حذف معامله: مدیر بندر معاملهٔ بندر خودش را حذف می‌کند (۲۰۴)، بندر دیگر ۴۰۴',
+              other_branch.status_code == 404 and own_branch.status_code == 204, f'other={other_branch.status_code}, own={own_branch.status_code}')
+
+        # Deleting a document (or its transaction) removes the stored file too, after the commit.
+        from django.core.files.storage import default_storage  # noqa: E402
+        gone = client_a.post('/api/documents/', {'transaction': tx_a.id, 'file': SimpleUploadedFile('حذفی.png', png)},
+                             format='multipart')
+        gone_doc = Document.objects.get(pk=gone.data['id'])
+        stored_documents.append(gone_doc.file.name)
+        on_disk = default_storage.exists(gone_doc.file.name)
+        with TestCase.captureOnCommitCallbacks(execute=True):
+            deleted = client_a.delete(f'/api/documents/{gone_doc.id}/')
+        check('حذف سند فایل آن را هم از دیسک پاک می‌کند (بعد از commit)',
+              on_disk and deleted.status_code == 204 and not default_storage.exists(gone_doc.file.name),
+              f'before={on_disk}, status={deleted.status_code}, after={default_storage.exists(gone_doc.file.name)}')
+
         raise Rollback
 except Rollback:
     pass
+finally:
+    # Uploaded files live on disk, outside the rolled-back transaction.
+    from django.core.files.storage import default_storage  # noqa: E402
+    for response in open_responses:
+        response.close()
+    for name in stored_documents:
+        default_storage.delete(name)
 
 print('ی) پاک‌کاری')
 check('همهٔ داده‌های آزمایشی rollback شد', counts() == before, f'before={before}, after={counts()}')

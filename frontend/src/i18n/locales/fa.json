@@ -237,7 +237,9 @@
     "all_currencies": "همهٔ ارزها",
     "rate_invalid": "نرخ یک عدد مثبت با حداکثر ۸ رقم اعشار باشد",
     "future_date": "تاریخ آینده قبول نیست",
-    "range_invalid": "«از تاریخ» بعد از «تا تاریخ» است"
+    "range_invalid": "«از تاریخ» بعد از «تا تاریخ» است",
+    "today_dialog_title": "ثبت نرخ امروز",
+    "today_only_note": "مدیر بندر فقط نرخ امروز را ثبت کرده می‌تواند؛ نرخ ثبت‌شده ویرایش یا حذف نمی‌شود."
   },
   "statement_lines": {
     "title": "سطرهای گزارش عاید",
@@ -401,9 +403,15 @@
     "integer_invalid": "یک عدد صحیح ۰ یا بیشتر",
     "rate_invalid": "نرخ مثبت، حداکثر ۸ رقم اعشار",
     "draft_restored": "معلوماتی که پیش‌تر نوشته بودید دوباره آمد.",
-    "documents_only_note": "فیلتر «فقط دارای سند» در مرحلهٔ ۱۲ب می‌آید (API هنوز این فیلتر را ندارد).",
     "filters": "فیلترها",
-    "page_info": "صفحهٔ {{page}}"
+    "page_info": "صفحهٔ {{page}}",
+    "delete_title": "معاملهٔ {{serial}} حذف شود؟",
+    "delete_message": "معامله و همهٔ اسناد آن برای همیشه حذف می‌شوند. تاریخچهٔ تغییرها می‌ماند.",
+    "deleted": "معاملهٔ {{serial}} حذف شد",
+    "documents_filter": "اسناد",
+    "documents_any": "اسناد: همه",
+    "documents_only": "فقط دارای سند",
+    "documents_none": "بدون سند"
   },
   "sections": {
     "identity": "شناسه",
@@ -478,5 +486,44 @@
     "seal_expense": "مبلغ سیم سرغچ",
     "scale_ticket_expense": "تکت ترازو",
     "gate_ticket_expense": "تکت دروازه"
+  },
+  "detail": {
+    "crumb": "جزئیات",
+    "title": "معاملهٔ",
+    "printed_on": "تاریخ چاپ",
+    "print": "چاپ",
+    "money": "مبالغ",
+    "item": "شرح",
+    "revenue": "یگانه عاید",
+    "rate_afn": "معامله به افغانی است.",
+    "rate_line": "نرخ این معامله: ۱ {{currency}} = {{rate}} ؋",
+    "usd_rate_line": "نرخ دالرِ تاریخ معامله: {{rate}} ؋",
+    "sign_prepared": "ترتیب‌کننده",
+    "sign_checked": "بررسی‌کننده",
+    "sign_approved": "تأییدکننده"
+  },
+  "documents": {
+    "title": "اسناد",
+    "drop_hint": "فایل‌ها را اینجا بکشید و رها کنید، یا انتخاب کنید",
+    "choose": "انتخاب فایل",
+    "limits": "PDF، JPG، PNG یا WEBP — هر فایل حداکثر {{mb}} میگابایت",
+    "too_large": "حجم فایل بیشتر از {{mb}} میگابایت است.",
+    "bad_type": "نوع فایل مجاز نیست. فقط PDF، JPG، PNG و WEBP قبول می‌شود.",
+    "content_mismatch": "محتوای فایل با نوع آن مطابقت ندارد. فایل خراب یا جعلی است.",
+    "uploaded": "«{{name}}» آپلود شد",
+    "open": "باز کردن",
+    "download": "دانلود",
+    "delete_title": "سند «{{name}}» حذف شود؟",
+    "delete_message": "فایل برای همیشه حذف می‌شود.",
+    "deleted": "سند حذف شد",
+    "empty": "هنوز سندی آپلود نشده است.",
+    "thumb_failed": "پیش‌نمایش باز نشد"
+  },
+  "history": {
+    "title": "تاریخچهٔ تغییرها",
+    "empty": "تاریخچه‌ای نیست",
+    "by": "توسط",
+    "initial": "ثبت اول",
+    "no_changes": "بدون تغییر در فیلدها"
   }
 }

@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { Building2, CalendarDays, CheckCircle2, XCircle } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AdminOverview } from '@/components/admin/AdminOverview';
+import { TodayRateBanner } from '@/components/admin/TodayRateBanner';
+import { TodayRateDialog } from '@/components/finance/TodayRateDialog';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
@@ -18,6 +20,7 @@ export function Dashboard(): JSX.Element {
   const user = useAuth((s) => s.user);
   const setUser = useAuth((s) => s.setUser);
   const today = dualDate(kabulToday());
+  const [rateDialog, setRateDialog] = useState(false);
 
   const me = useQuery({
     queryKey: ['auth', 'me', user?.id],
@@ -36,6 +39,13 @@ export function Dashboard(): JSX.Element {
   return (
     <>
       {isSuperAdmin && <AdminOverview />}
+      {!isSuperAdmin && (
+        // A branch manager may enter today's rate (only today's); it unblocks new transactions.
+        <div className="mb-6">
+          <TodayRateBanner onAdd={() => setRateDialog(true)} />
+          <TodayRateDialog open={rateDialog} onClose={() => setRateDialog(false)} />
+        </div>
+      )}
       <Card className="overflow-hidden">
         <div className="h-1.5 bg-gradient-to-l from-brand via-brand to-accent" />
         <CardBody className="space-y-6 p-6 sm:p-8">

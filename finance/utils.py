@@ -1,4 +1,6 @@
 """Helpers for daily exchange rates and the daily-rate soft lock."""
+import bisect
+
 import jdatetime
 from django.utils import timezone
 
@@ -32,6 +34,60 @@ def get_rate_for(date, currency):
     if exact:
         return exact
     return ExchangeRate.objects.filter(date__lt=date, currency=currency).order_by('-date').first()
+
+
+def usd_rate_on(day):
+    """
+    USD→AFN rate for a date: that day's rate, else the most recent earlier one; None when no
+    rate exists on or before it. Never today's rate for an older date. One query. This is the
+    rule of the income statement and of every transaction's USD figures.
+    """
+    from .models import ExchangeRate
+    return (ExchangeRate.objects.filter(currency='USD', date__lte=day)
+            .order_by('-date').values_list('rate', flat=True).first())
+
+
+class UsdRateTable:
+    """
+    usd_rate_on() for many dates with a fixed number of queries: loads the USD rates up to
+    `until` once (1 query) — or only from `since` on, plus the latest rate before it (2 queries)
+    — then answers each date from memory. Dates without any rate are collected in
+    `missing_dates`.
+    """
+
+    def __init__(self, until, since=None):
+        from .models import ExchangeRate
+        rates = ExchangeRate.objects.filter(currency='USD', date__lte=until)
+        if since is None:
+            rows = list(rates.order_by('date').values_list('date', 'rate'))
+        else:
+            rows = list(rates.filter(date__gte=since).order_by('date').values_list('date', 'rate'))
+            earlier = rates.filter(date__lt=since).order_by('-date').values_list('date', 'rate').first()
+            if earlier:
+                rows.insert(0, earlier)
+        self.dates = [row[0] for row in rows]
+        self.rates = [row[1] for row in rows]
+        self.missing_dates = set()
+
+    def on(self, day):
+        index = bisect.bisect_right(self.dates, day) - 1
+        if index < 0:
+            self.missing_dates.add(str(day))
+            return None
+        return self.rates[index]
+
+
+def attach_usd_rates(transactions):
+    """
+    Give every non-USD transaction its date's USD rate (Transaction._usd_rate) in at most two
+    queries, so a list of rows does not query once per row for its USD figures.
+    """
+    rows = [tx for tx in transactions if tx.currency != 'USD']
+    if not rows:
+        return
+    table = UsdRateTable(until=max(tx.date for tx in rows), since=min(tx.date for tx in rows))
+    for tx in rows:
+        tx._usd_rate = table.on(tx.date)
 
 
 class TodayRateMissing(Exception):
