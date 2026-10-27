@@ -230,6 +230,16 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
     عنصر (drawer/h1) بماند، نه فقط URL. `navigate()` حالا Promise برمی‌گرداند (`void navigate(...)`).
   - کود بندر بعد از ثبت تغییرناپذیر است (serializer + admin).
   - آزمایش stack: `scripts\prod_local_test.ps1` (Docker Desktop + WSL 2 لازم). راهنماها: `docs/DEPLOY.md`، `docs/USER_GUIDE.md`.
+- [x] اسناد گمرکی: DocumentType + DocumentRequirement + فیلدهای سند + فهرست اسناد
+  - `DocumentType` (operations؛ کود ثابت بعد از ثبت) و `DocumentRequirement` (config؛ بندر × نوع معامله × نوع سند).
+    پیش‌فرض‌ها در `operations/document_defaults.py`؛ مایگریشن‌ها خودشان seed می‌کنند. بندر تازه و نوع سند تازه
+    جدولشان را از signal می‌گیرند (`config/signals.py`)؛ `seed_document_types` / `seed_document_requirements` idempotent.
+  - هر آپلود `doc_type` (کود) لازم دارد. `Document.sync_number()` فیلد نمبر خالی معامله را پر می‌کند؛ نمبر متفاوت
+    فقط هشدار (`number_sync` / `number_mismatch`) — هیچ‌وقت بازنویسی نمی‌شود.
+  - `documents_status` با `operations.documents.attach_documents_status` (بدون N+1)؛ فیلتر `missing_documents`
+    با `missing_documents_condition()`. سند ناقص هرگز مانع ذخیره نیست.
+  - `/api/documents/` بدون `?page=` آرایه، با `?page=` صفحه‌بندی (`OptionalPagination`). جستجو رقم دری را نرمال می‌کند.
+  - آزمایش: `verify_documents.py` (۳۸) + `cleanup-documents.py --setup` → `verify-documents.mjs` (۳۰) → `cleanup-documents.py`.
 - [ ] فاز دوم: Transaction، FieldConfig، نرخ، فرانت (بعد از رسیدن اکسل جدید)
 
 ## graphify

@@ -58,3 +58,53 @@ class FieldConfig(models.Model):
         # field_name must be a Transaction field that a form can actually show
         if self.field_name not in dict(configurable_transaction_fields()):
             raise ValidationError({'field_name': f'فیلد «{self.field_name}» در مدل معامله موجود نیست.'})
+
+
+class DocumentRequirement(models.Model):
+    """
+    Which document types a branch needs for each trade type. Every branch has one row per
+    trade type × document type (made automatically); the super admin ticks `required`.
+    A missing required document only warns — it never blocks saving a transaction.
+    """
+
+    branch = models.ForeignKey('accounts.Branch', verbose_name='بندر / شعبه',
+                               on_delete=models.CASCADE, related_name='document_requirements')
+    trade_type = models.CharField('نوع معامله', max_length=20, choices=Transaction.TradeType.choices)
+    doc_type = models.ForeignKey('operations.DocumentType', verbose_name='نوع سند',
+                                 on_delete=models.CASCADE, related_name='requirements')
+    required = models.BooleanField('لازم است', default=False,
+                                   help_text='اگر تیک شود، معاملهٔ بدون این سند «سند ناقص» نشان داده می‌شود.')
+
+    history = HistoricalRecords(verbose_name='تاریخچهٔ سند لازم')
+
+    class Meta:
+        verbose_name = 'سند لازم'
+        verbose_name_plural = 'اسناد لازم'
+        unique_together = ('branch', 'trade_type', 'doc_type')
+        ordering = ['branch', 'trade_type', 'doc_type__sort_order']
+
+    def __str__(self):
+        return f'{self.branch} / {self.get_trade_type_display()} / {self.doc_type.name_fa}'
+
+
+def missing_requirement_rows(branches=None, doc_types=None):
+    """
+    Unsaved DocumentRequirement rows for every branch × trade type × document type that has
+    none yet; `required` follows DEFAULT_REQUIREMENTS. Existing rows are never touched.
+    """
+    from accounts.models import Branch
+    from operations.document_defaults import DEFAULT_REQUIREMENTS
+    from operations.models import DocumentType
+
+    branches = list(Branch.objects.all() if branches is None else branches)
+    doc_types = list(DocumentType.objects.all() if doc_types is None else doc_types)
+    existing = set(DocumentRequirement.objects.filter(branch__in=branches, doc_type__in=doc_types)
+                   .values_list('branch_id', 'trade_type', 'doc_type_id'))
+    return [
+        DocumentRequirement(branch=branch, trade_type=trade_type, doc_type=doc_type,
+                            required=doc_type.code in DEFAULT_REQUIREMENTS.get(trade_type, ()))
+        for branch in branches
+        for trade_type in Transaction.TradeType.values
+        for doc_type in doc_types
+        if (branch.pk, trade_type, doc_type.pk) not in existing
+    ]

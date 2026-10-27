@@ -1,4 +1,4 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.urls import reverse
 from django.utils.html import format_html
 from django_jalali.admin.filters import JDateFieldListFilter
@@ -11,7 +11,7 @@ from kabulcargo_backend.utils import dual_date
 
 from finance.admin import TodayRateRequiredAdminMixin
 
-from .models import Document, Transaction
+from .models import Document, DocumentType, Transaction
 
 
 def _money(value):
@@ -30,10 +30,29 @@ class TransactionForm(DigitNormalizingModelForm):
         fields = '__all__'
 
 
+def report_number_sync(request, document):
+    """Show the result of Document.sync_number() as an admin message (filled / differs)."""
+    result = document.sync_number()
+    if result and result['status'] == 'filled':
+        messages.info(request, result['message'])
+    elif result and result['status'] == 'mismatch':
+        messages.warning(request, result['message'])
+
+
+class DocumentForm(DigitNormalizingModelForm):
+    digit_fields = ('doc_number', 'issue_date')
+
+    class Meta:
+        model = Document
+        fields = '__all__'
+
+
 class DocumentInline(admin.TabularInline):
     model = Document
+    form = DocumentForm
     extra = 1
-    fields = ('title', 'file', 'uploaded_by', 'uploaded_display')
+    formfield_overrides = {jmodels.jDateField: {'widget': AdminjDateWidget}}
+    fields = ('doc_type', 'doc_number', 'issue_date', 'file', 'note', 'uploaded_by', 'uploaded_display')
     readonly_fields = ('uploaded_by', 'uploaded_display')
     verbose_name = 'سند'
     verbose_name_plural = 'آپلود اسناد'
@@ -139,6 +158,8 @@ class TransactionAdmin(TodayRateRequiredAdminMixin, SimpleHistoryAdmin):
             if not document.pk:
                 document.uploaded_by = request.user
             document.save()
+            if isinstance(document, Document):
+                report_number_sync(request, document)
         for document in formset.deleted_objects:
             document.delete()
         formset.save_m2m()
@@ -146,13 +167,19 @@ class TransactionAdmin(TodayRateRequiredAdminMixin, SimpleHistoryAdmin):
 
 @admin.register(Document)
 class DocumentAdmin(SimpleHistoryAdmin):
-    list_display = ('__str__', 'transaction', 'uploaded_by', 'uploaded_display', 'download_link')
-    list_filter = ('transaction__branch', 'transaction__trade_type')
-    search_fields = ('title', 'transaction__serial_number', 'transaction__plate_afghan')
-    list_select_related = ('transaction', 'uploaded_by')
+    form = DocumentForm
+    formfield_overrides = {jmodels.jDateField: {'widget': AdminjDateWidget}}
+    list_display = ('__str__', 'doc_type', 'doc_number', 'issue_display', 'transaction', 'uploaded_by',
+                    'uploaded_display', 'download_link')
+    list_filter = ('doc_type', 'transaction__branch', 'transaction__trade_type')
+    search_fields = ('doc_number', 'title', 'note', 'transaction__serial_number', 'transaction__plate_afghan')
+    list_select_related = ('transaction', 'uploaded_by', 'doc_type')
     autocomplete_fields = ('transaction',)
     readonly_fields = ('uploaded_by', 'uploaded_display', 'download_link')
-    fields = ('transaction', 'title', 'file', 'download_link', 'uploaded_by', 'uploaded_display')
+    fieldsets = (
+        ('سند', {'fields': ('transaction', 'doc_type', 'doc_number', 'issue_date', 'note')}),
+        ('فایل', {'fields': ('file', 'title', 'download_link', 'uploaded_by', 'uploaded_display')}),
+    )
 
     @admin.display(description='باز کردن فایل')
     def download_link(self, obj):
@@ -162,6 +189,10 @@ class DocumentAdmin(SimpleHistoryAdmin):
         return format_html('<a href="{}" target="_blank" rel="noopener">باز کردن / دانلود</a>',
                            reverse('document-download', args=[obj.pk]))
 
+    @admin.display(description='تاریخ صدور (شمسی | میلادی)', ordering='issue_date')
+    def issue_display(self, obj):
+        return dual_date(obj.issue_date) if obj.issue_date else '—'
+
     @admin.display(description='تاریخ آپلود (شمسی | میلادی)', ordering='uploaded_at')
     def uploaded_display(self, obj):
         return dual_date(obj.uploaded_at) if obj.pk else '—'
@@ -170,3 +201,21 @@ class DocumentAdmin(SimpleHistoryAdmin):
         if not change:
             obj.uploaded_by = request.user
         super().save_model(request, obj, form, change)
+        report_number_sync(request, obj)
+
+
+@admin.register(DocumentType)
+class DocumentTypeAdmin(SimpleHistoryAdmin):
+    list_display = ('code', 'name_fa', 'name_ps', 'name_en', 'number_field', 'sort_order', 'is_active')
+    list_editable = ('sort_order', 'is_active')
+    list_filter = ('is_active',)
+    search_fields = ('code', 'name_fa', 'name_ps', 'name_en')
+    ordering = ('sort_order', 'code')
+    fieldsets = (
+        ('نوع سند', {'fields': ('code', 'name_fa', 'name_ps', 'name_en')}),
+        ('تنظیم', {'fields': ('number_field', 'sort_order', 'is_active')}),
+    )
+
+    def get_readonly_fields(self, request, obj=None):
+        # The code is used by the requirement grid and in filters; fixed once the type exists.
+        return ('code',) if obj else ()

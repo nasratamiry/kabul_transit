@@ -3,6 +3,7 @@ from datetime import date
 import django_filters
 import jdatetime
 from django_filters.constants import EMPTY_VALUES
+from rest_framework import filters
 from rest_framework.exceptions import ValidationError
 
 from kabulcargo_backend.utils import normalize_digits
@@ -30,3 +31,10 @@ class ShamsiDateFilter(django_filters.CharFilter):
         except (TypeError, ValueError):
             raise ValidationError({self.field_name: 'تاریخ نامعتبر است. شکل درست: ۱۴۰۵-۰۸-۰۱ یا 2026-10-23'})
         return super().filter(qs, value)
+
+
+class DigitSearchFilter(filters.SearchFilter):
+    """?search= with Dari / Arabic digits converted first (۷۷۷ finds 777) — not left to the collation."""
+
+    def get_search_terms(self, request):
+        return [normalize_digits(term) for term in super().get_search_terms(request)]

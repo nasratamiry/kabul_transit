@@ -238,7 +238,7 @@ try:
         mgr_client, _ = login('10.7.3.1', 'zz_sec_mgr')
 
         def upload(name, content):
-            return mgr_client.post('/api/documents/', {'transaction': txn.pk, 'title': 'آزمایش',
+            return mgr_client.post('/api/documents/', {'doc_type': 'OTHER', 'transaction': txn.pk, 'title': 'آزمایش',
                                                        'file': SimpleUploadedFile(name, content)}, format='multipart')
 
         big = upload('big.pdf', pdf_bytes(11 * 1024 * 1024))

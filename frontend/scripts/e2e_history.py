@@ -6,19 +6,19 @@ audit rows behind — a test branch alone leaves 172 FieldConfig history rows. C
 AFTER deleting the objects: the delete itself writes one more «-» row per object.
 """
 from accounts.models import Branch, User
-from config.models import FieldConfig
+from config.models import DocumentRequirement, FieldConfig
 from finance.models import ExchangeRate, Hawala, OfficeExpense
 
 
 def purge_history(branch_codes=(), usernames=(), rate_author=None, branch_ids=()):
-    """Remove the history rows of test branches (and their FieldConfig, hawala and office
-    expenses), test users, and every rate the test author entered — also rates the run already
+    """Remove the history rows of test branches (and their FieldConfig, document requirements,
+    hawala and office expenses), test users, and every rate the test author entered — also rates the run already
     deleted. Returns the row count."""
     removed = 0
     # Branches the run already deleted (e.g. DELKC) only live on in their own history rows.
     ids = set(branch_ids) | set(Branch.history.filter(code__in=list(branch_codes)).values_list('id', flat=True))
     if ids:
-        for model in (FieldConfig, Hawala, OfficeExpense):
+        for model in (FieldConfig, DocumentRequirement, Hawala, OfficeExpense):
             removed += model.history.filter(branch_id__in=ids).delete()[0]
     if branch_codes:
         removed += Branch.history.filter(code__in=list(branch_codes)).delete()[0]

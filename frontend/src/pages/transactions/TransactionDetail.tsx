@@ -347,7 +347,7 @@ export function TransactionDetail(): JSX.Element {
         ))}
       </div>
 
-      <DocumentsPanel transactionId={r.id} />
+      <DocumentsPanel tx={r} />
 
       <Card className="p-5 print:hidden" data-testid="detail-history">
         <h2 className="mb-4 font-semibold text-brand dark:text-emerald-300">

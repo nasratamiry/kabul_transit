@@ -6,3 +6,12 @@ class StandardPagination(PageNumberPagination):
     page_size = 25
     page_size_query_param = 'page_size'
     max_page_size = 200
+
+
+class OptionalPagination(StandardPagination):
+    """Paginated only when ?page= is given; otherwise the plain list (small, filtered lists)."""
+
+    def paginate_queryset(self, queryset, request, view=None):
+        if 'page' not in request.query_params:
+            return None
+        return super().paginate_queryset(queryset, request, view)

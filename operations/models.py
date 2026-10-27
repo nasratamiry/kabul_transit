@@ -3,10 +3,13 @@ from decimal import Decimal
 import jdatetime
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models
 from django.utils import timezone
 from django_jalali.db import models as jmodels
 from simple_history.models import HistoricalRecords
+
+from kabulcargo_backend.utils import normalize_digits
 
 from .validators import validate_file_extension, validate_file_magic, validate_file_size
 
@@ -206,11 +209,62 @@ class Transaction(models.Model):
         return (self.profit_or_loss_afn / rate).quantize(TWO_PLACES) if rate else None
 
 
+# Transaction fields that hold a document's number; a DocumentType may point at one of them.
+DOCUMENT_NUMBER_FIELDS = (
+    't1_number', 't2_number', 'cmr_number', 'mafi_number', 'exit_slip_number',
+    'bank_tariff_slip_number', 'scale_ticket_number', 'seal_number',
+)
+
+
+def _same_number(a, b):
+    """Document numbers compare without case, spaces or digit script (۱۲۳ == 123)."""
+    def plain(value):
+        return ''.join(normalize_digits(value or '').split()).casefold()
+    return plain(a) == plain(b)
+
+
+class DocumentType(models.Model):
+    """A kind of customs / transport paper (T1, CMR, ...). Managed by the super admin."""
+
+    code = models.CharField('کود', max_length=30, unique=True,
+                            validators=[RegexValidator(r'^[A-Z][A-Z0-9_]*$',
+                                                       'کود فقط حروف بزرگ انگلیسی، عدد و _ باشد (مثلاً T1).')],
+                            help_text='کود انگلیسی کوتاه با حروف بزرگ، مثلاً T1 یا CMR. بعد از ثبت تغییر نمی‌کند.')
+    name_fa = models.CharField('نام (دری)', max_length=100)
+    name_ps = models.CharField('نام (پشتو)', max_length=100, blank=True)
+    name_en = models.CharField('نام (انگلیسی)', max_length=100, blank=True)
+    number_field = models.CharField(
+        'فیلد نمبر در معامله', max_length=40, blank=True,
+        choices=[(name, Transaction._meta.get_field(name).verbose_name) for name in DOCUMENT_NUMBER_FIELDS],
+        help_text='اگر انتخاب شود، نمبر این سند با همین فیلد معامله مقایسه / پر می‌شود.')
+    sort_order = models.PositiveIntegerField('ترتیب نمایش', default=100, help_text='عدد کمتر = بالاتر در فهرست')
+    is_active = models.BooleanField('فعال', default=True,
+                                    help_text='نوع غیرفعال برای آپلود تازه نشان داده نمی‌شود؛ اسناد قبلی می‌مانند.')
+
+    history = HistoricalRecords(verbose_name='تاریخچهٔ نوع سند')
+
+    class Meta:
+        verbose_name = 'نوع سند'
+        verbose_name_plural = 'انواع اسناد'
+        ordering = ['sort_order', 'code']
+
+    def __str__(self):
+        return f'{self.name_fa} ({self.code})'
+
+    def clean(self):
+        self.code = (self.code or '').strip().upper()
+
+
 class Document(models.Model):
-    """A scanned / uploaded file attached to a transaction."""
+    """A scanned / uploaded file attached to a transaction. Several files per type are fine (multi-page T1)."""
 
     transaction = models.ForeignKey(Transaction, verbose_name='معامله', on_delete=models.CASCADE,
                                     related_name='documents')
+    doc_type = models.ForeignKey(DocumentType, verbose_name='نوع سند', on_delete=models.PROTECT,
+                                 related_name='documents')
+    doc_number = models.CharField('نمبر سند', max_length=60, blank=True)
+    issue_date = jmodels.jDateField('تاریخ صدور', null=True, blank=True, help_text='تاریخ شمسی صدور سند')
+    note = models.TextField('یادداشت', blank=True)
     file = models.FileField('فایل سند', upload_to='documents/%Y/%m/',
                             validators=[validate_file_size, validate_file_extension, validate_file_magic],
                             help_text='PDF، JPG، PNG یا WEBP — حداکثر ۱۰ میگابایت')
@@ -225,6 +279,50 @@ class Document(models.Model):
         verbose_name = 'سند'
         verbose_name_plural = 'اسناد'
         ordering = ['-uploaded_at']
+        indexes = [models.Index(fields=['doc_number'], name='doc_number_idx')]
 
     def __str__(self):
-        return self.title or self.file.name.rsplit('/', 1)[-1]
+        if self.title:
+            return self.title
+        if self.doc_type_id:
+            return f'{self.doc_type.name_fa} {self.doc_number}'.strip()
+        return self.file.name.rsplit('/', 1)[-1]
+
+    def clean(self):
+        self.doc_number = normalize_digits(self.doc_number or '')
+
+    @property
+    def number_field(self):
+        return self.doc_type.number_field if self.doc_type_id else ''
+
+    def number_mismatch(self):
+        """The transaction's own number when it differs from this document's number, else None."""
+        field = self.number_field
+        if not field or not self.doc_number:
+            return None
+        current = getattr(self.transaction, field) or ''
+        return current if current and not _same_number(current, self.doc_number) else None
+
+    def sync_number(self):
+        """
+        Copy doc_number into the transaction's matching number field (DocumentType.number_field)
+        when that field is empty. When it already holds a different number nothing is
+        overwritten: both are kept and a Dari warning comes back. Returns None when there is
+        nothing to compare, else {field, label, status: filled|same|mismatch, transaction_value, message}.
+        """
+        field, number = self.number_field, (self.doc_number or '').strip()
+        if not field or not number:
+            return None
+        tx = self.transaction
+        current = (getattr(tx, field) or '').strip()
+        label = str(Transaction._meta.get_field(field).verbose_name)
+        result = {'field': field, 'label': label, 'transaction_value': current or number}
+        if not current:
+            setattr(tx, field, number)
+            tx.save(update_fields=[field, 'updated_at'])
+            return {**result, 'status': 'filled', 'message': f'«{label}» معامله از روی این سند پر شد: {number}'}
+        if _same_number(current, number):
+            return {**result, 'status': 'same', 'message': ''}
+        return {**result, 'status': 'mismatch',
+                'message': f'نمبر این سند ({number}) با «{label}» معامله ({current}) فرق دارد. '
+                           'هیچ‌کدام تغییر داده نشد؛ اگر لازم است، معامله را اصلاح کنید.'}

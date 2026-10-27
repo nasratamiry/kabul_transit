@@ -254,6 +254,7 @@ await step(
     );
     const form = new FormData();
     form.append('transaction', String(created.txId));
+    form.append('doc_type', 'OTHER');
     form.append('file', new Blob([png], { type: 'image/png' }), 'سند.png');
     const doc = await api('POST', '/documents/', form);
     created.docId = doc.data.id;

@@ -110,6 +110,7 @@ export interface Transaction {
   plate_foreign: string;
   row_summary: RowSummary;
   documents_count: number;
+  documents_status: DocumentsStatus;
   created_by: number | null;
   created_at: string;
   updated_at: string;
@@ -117,19 +118,80 @@ export interface Transaction {
   [field: string]: unknown;
 }
 
+/** Document type codes: T1, CMR, CUSTOMS_DECLARATION, … (admin-managed, see /document-types/). */
+export interface DocumentType {
+  id: number;
+  code: string;
+  name_fa: string;
+  name_ps: string;
+  name_en: string;
+  /** Transaction field this type's number is compared with / copied into ('' = none). */
+  number_field: string;
+  sort_order: number;
+  is_active: boolean;
+  documents_count: number;
+}
+
+/** One cell of a branch's requirement grid (branch × trade type × document type). */
+export interface DocumentRequirement {
+  id: number;
+  branch: number;
+  trade_type: Transaction['trade_type'];
+  doc_type: number;
+  doc_type_code: string;
+  required: boolean;
+}
+
+/** Codes of the document types the branch requires / the record has / still lacks. */
+export interface DocumentsStatus {
+  required: string[];
+  present: string[];
+  missing: string[];
+}
+
+/** Result of comparing an uploaded document's number with the transaction's number field. */
+export interface NumberSync {
+  field: string;
+  label: string;
+  status: 'filled' | 'same' | 'mismatch';
+  transaction_value: string;
+  message: string;
+}
+
 /** DocumentSerializer — the file itself is only reachable through download_url (authenticated). */
 export interface TxDocument {
   id: number;
   transaction: number;
+  transaction_info: {
+    id: number;
+    serial_number: string;
+    trade_type: Transaction['trade_type'];
+    date: string;
+    branch: number;
+    branch_name: string;
+    plate_afghan: string;
+  };
+  doc_type: string;
+  doc_type_names: { fa: string; ps: string; en: string };
+  doc_number: string;
+  /** Shamsi 'YYYY-MM-DD' or null. */
+  issue_date: string | null;
+  note: string;
   title: string;
   uploaded_at: string;
   uploaded_by: number | null;
   uploaded_by_name: string | null;
+  uploaded_by_username: string | null;
   /** '/api/documents/<id>/download/' — add ?download=1 for an attachment. */
   download_url: string;
   file_name: string;
   file_size: number | null;
   content_type: string;
+  number_field: string;
+  /** The transaction's own number when it differs from doc_number. */
+  number_mismatch: string | null;
+  /** Only in the response of an upload / edit. */
+  number_sync: NumberSync | null;
 }
 
 /** GET <resource>/<id>/history/ (api/history.py) — newest first, changed fields only. */

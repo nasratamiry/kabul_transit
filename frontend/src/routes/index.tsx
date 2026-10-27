@@ -2,10 +2,13 @@ import { createBrowserRouter, Outlet } from 'react-router';
 
 import { AppShell } from '@/components/layout/AppShell';
 import { Branches } from '@/pages/admin/Branches';
+import { DocumentRequirements } from '@/pages/admin/DocumentRequirements';
+import { DocumentTypes } from '@/pages/admin/DocumentTypes';
 import { ExchangeRates } from '@/pages/admin/ExchangeRates';
 import { StatementLines } from '@/pages/admin/StatementLines';
 import { Users } from '@/pages/admin/Users';
 import { Dashboard } from '@/pages/Dashboard';
+import { DocumentsRegister } from '@/pages/documents/DocumentsRegister';
 import { HawalaPage } from '@/pages/finance/HawalaPage';
 import { OfficeExpensesPage } from '@/pages/finance/OfficeExpensesPage';
 import { Login } from '@/pages/Login';
@@ -66,6 +69,8 @@ export const router = createBrowserRouter([
           { path: ':id/edit', element: <TransactionForm />, handle: crumb('common.edit') },
         ],
       },
+      // Both roles; a branch manager only ever sees their own branch's documents (API queryset).
+      { path: 'documents', element: <DocumentsRegister />, handle: crumb('nav.documents') },
       {
         // Both roles; a branch manager always gets their own branch (API).
         path: 'reports',
@@ -162,6 +167,20 @@ export const router = createBrowserRouter([
             element: <ExchangeRates />,
             handle: crumb('nav.exchange_rates'),
             children: [{ path: 'new', handle: crumb('common.add') }],
+          },
+          {
+            path: 'document-types',
+            element: <DocumentTypes />,
+            handle: crumb('nav.document_types'),
+            children: [
+              { path: 'new', handle: crumb('common.add') },
+              { path: ':id/edit', handle: crumb('common.edit') },
+            ],
+          },
+          {
+            path: 'document-requirements',
+            element: <DocumentRequirements />,
+            handle: crumb('nav.document_requirements'),
           },
           {
             path: 'statement-lines',

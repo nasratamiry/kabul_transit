@@ -6,6 +6,7 @@ import { useList } from '@/lib/hooks';
 import { useTodayUsdRate } from '@/lib/rates';
 import type { Branch, StatementLine, Trader, TransportCompany, User } from '@/types/api';
 
+import { MissingDocumentsTile } from '../dashboard/MissingDocumentsTile';
 import { OfficeMonthTile } from '../finance/OfficeMonthTile';
 
 import { Tile } from './Tile';
@@ -82,6 +83,7 @@ export function AdminOverview(): JSX.Element {
           testId="tile-companies"
         />
         <OfficeMonthTile />
+        <MissingDocumentsTile />
       </div>
     </section>
   );

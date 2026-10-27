@@ -203,7 +203,7 @@ try:
 
         moved = client_a.patch(f'/api/transactions/{tx_a.id}/', {'branch': branch_b.id}, format='json')
         tx_a.refresh_from_db()
-        upload = client_a.post('/api/documents/', {'transaction': tx_b.id, 'title': 'hack',
+        upload = client_a.post('/api/documents/', {'doc_type': 'OTHER', 'transaction': tx_b.id, 'title': 'hack',
                                                    # a valid PDF, so the branch check (403) is what refuses it
                                                    'file': SimpleUploadedFile('x.pdf', b'%PDF-1.4\n%%EOF\n')},
                                   format='multipart')
@@ -403,7 +403,7 @@ try:
         png = (b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00'
                b'\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00'
                b'\x00\x00\x00IEND\xaeB`\x82')
-        upload = client_a.post('/api/documents/', {'transaction': tx_a.id, 'title': 'بارنامه',
+        upload = client_a.post('/api/documents/', {'doc_type': 'OTHER', 'transaction': tx_a.id, 'title': 'بارنامه',
                                                     'file': SimpleUploadedFile('بارنامهٔ تورخم.png', png)},
                                format='multipart')
         doc = Document.objects.filter(pk=upload.data.get('id')).first() if upload.status_code == 201 else None
@@ -645,7 +645,7 @@ try:
 
         # Deleting a document (or its transaction) removes the stored file too, after the commit.
         from django.core.files.storage import default_storage  # noqa: E402
-        gone = client_a.post('/api/documents/', {'transaction': tx_a.id, 'file': SimpleUploadedFile('حذفی.png', png)},
+        gone = client_a.post('/api/documents/', {'doc_type': 'OTHER', 'transaction': tx_a.id, 'file': SimpleUploadedFile('حذفی.png', png)},
                              format='multipart')
         gone_doc = Document.objects.get(pk=gone.data['id'])
         stored_documents.append(gone_doc.file.name)

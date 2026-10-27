@@ -47,7 +47,7 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
 BACKEND_SCRIPTS = ['verify_field_config', 'verify_transaction', 'verify_finance', 'verify_api',
-                   'verify_statement', 'verify_security']
+                   'verify_statement', 'verify_security', 'verify_documents']
 
 # name, fixture script, setup args, cleanup args, verify script, password env, extra env
 E2E_STAGES = [
@@ -58,6 +58,7 @@ E2E_STAGES = [
     ('e2e-stage12b', 'cleanup-stage12b.py', ['--setup'], [], 'verify-stage12b.mjs', {}),
     ('e2e-stage13', 'cleanup-stage13.py', ['--setup'], [], 'verify-stage13.mjs', {}),
     ('e2e-stage14', 'cleanup-stage14.py', ['--setup'], [], 'verify-stage14.mjs', {}),
+    ('e2e-documents', 'cleanup-documents.py', ['--setup'], [], 'verify-documents.mjs', {}),
     ('e2e-stage9', 'cleanup-stage9.py', ['--setup'], [], 'verify-e2e.mjs',
      {'KC_ADMIN_USER': 'e2e_admin', 'KC_ADMIN_PASS': 'E2e-Stage09-Pass-2026',
       'KC_MANAGER_USER': 'e2e_manager', 'KC_MANAGER_PASS': 'E2e-Stage09-Pass-2026'}),

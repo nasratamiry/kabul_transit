@@ -26,3 +26,27 @@ def auto_seed_field_config_for_new_branch(sender, instance, created, raw=False, 
     # bulk_create would skip, credited to whoever created the branch.
     creation = instance.history.order_by('-history_date').first()
     bulk_create_with_history(rows, FieldConfig, default_user=creation.history_user if creation else None)
+
+
+@receiver(post_save, sender=Branch)
+def auto_seed_document_requirements_for_new_branch(sender, instance, created, raw=False, **kwargs):
+    """A new branch gets its document-requirement grid (defaults per trade type) right away."""
+    if not created or raw:
+        return
+    from config.models import DocumentRequirement, missing_requirement_rows
+
+    creation = instance.history.order_by('-history_date').first()
+    bulk_create_with_history(missing_requirement_rows(branches=[instance]), DocumentRequirement,
+                             default_user=creation.history_user if creation else None)
+
+
+@receiver(post_save, sender='operations.DocumentType')
+def add_new_document_type_to_every_branch(sender, instance, created, raw=False, **kwargs):
+    """A new document type appears in every branch's grid, not required until the admin ticks it."""
+    if not created or raw:
+        return
+    from config.models import DocumentRequirement, missing_requirement_rows
+
+    creation = instance.history.order_by('-history_date').first()
+    bulk_create_with_history(missing_requirement_rows(doc_types=[instance]), DocumentRequirement,
+                             default_user=creation.history_user if creation else None)

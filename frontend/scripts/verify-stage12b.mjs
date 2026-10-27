@@ -248,10 +248,15 @@ await step(6, 'Print view: A4 PDF, no topbar/sidebar, letterhead + signatures', 
 // ================================ Documents ================================
 let docs = [];
 await step(7, 'Upload a PDF and a PNG at once (progress, then listed with thumbnail)', async () => {
+  // Since the customs-documents stage every upload has a type (here «سایر اسناد»).
+  await mgr.click('[data-testid=upload-open]');
+  await mgr.getByTestId('upload-dialog').waitFor();
+  await mgr.selectOption('[data-testid=doc-type-select]', 'OTHER');
   await mgr.setInputFiles('[data-testid=file-input]', [
     { name: 'بارنامه.pdf', mimeType: 'application/pdf', buffer: PDF },
     { name: 'photo.png', mimeType: 'image/png', buffer: PNG },
   ]);
+  await mgr.locator('[data-testid=upload-submit]:not([disabled])').click();
   await mgr.waitForFunction(
     () => document.querySelectorAll('[data-testid=document-item]').length === 2,
     null,
@@ -272,6 +277,9 @@ await step(8, 'Client refuses 11 MB and an .exe renamed .jpg (no request sent)',
   let posted = 0;
   const listener = (r) => r.method() === 'POST' && r.url().endsWith('/api/documents/') && posted++;
   mgr.on('request', listener);
+  await mgr.click('[data-testid=upload-open]');
+  await mgr.getByTestId('upload-dialog').waitFor();
+  await mgr.selectOption('[data-testid=doc-type-select]', 'OTHER');
   await mgr.setInputFiles('[data-testid=file-input]', [
     { name: 'big.pdf', mimeType: 'application/pdf', buffer: BIG },
     { name: 'virus.jpg', mimeType: 'image/jpeg', buffer: EXE },
@@ -281,12 +289,16 @@ await step(8, 'Client refuses 11 MB and an .exe renamed .jpg (no request sent)',
     null,
     { timeout: 10000 },
   );
+  const submitDisabled = await mgr.getByTestId('upload-submit').isDisabled();
   mgr.off('request', listener);
   const msgs = await mgr.getByTestId('upload-error').allTextContents();
+  await mgr.keyboard.press('Escape');
+  await mgr.getByTestId('upload-dialog').waitFor({ state: 'detached' });
   check(
     8,
     'Client refuses 11 MB and an .exe renamed .jpg (no request sent)',
     posted === 0 &&
+      submitDisabled &&
       msgs.some((m) => m.includes('میگابایت')) &&
       msgs.some((m) => m.includes('جعلی')),
     msgs.join(' | '),
@@ -299,6 +311,7 @@ await step(9, 'Server refuses the same files (final judge, Dari message)', async
       async ({ name, bytes, type, tx }) => {
         const body = new FormData();
         body.append('transaction', String(tx));
+        body.append('doc_type', 'OTHER');
         body.append('file', new File([new Uint8Array(bytes)], name, { type }));
         const r = await fetch('/api/documents/', {
           method: 'POST',
@@ -314,6 +327,7 @@ await step(9, 'Server refuses the same files (final judge, Dari message)', async
     async ({ tx }) => {
       const body = new FormData();
       body.append('transaction', String(tx));
+      body.append('doc_type', 'OTHER');
       body.append(
         'file',
         new File([new Uint8Array(11 * 1024 * 1024).fill(48)], 'big.pdf', {

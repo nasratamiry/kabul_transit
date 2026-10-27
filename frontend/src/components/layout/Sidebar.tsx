@@ -1,7 +1,10 @@
 import {
   ArrowLeftRight,
   Building2,
+  ClipboardCheck,
   Coins,
+  FileStack,
+  Files,
   FileBarChart,
   LayoutDashboard,
   ListOrdered,
@@ -30,6 +33,7 @@ interface NavItem {
 const MAIN: NavItem[] = [
   { label: 'nav.dashboard', icon: LayoutDashboard, to: '/dashboard' },
   { label: 'nav.transactions', icon: ArrowLeftRight, to: '/transactions' },
+  { label: 'nav.documents', icon: Files, to: '/documents' },
   { label: 'nav.income_statement', icon: FileBarChart, to: '/reports/income-statement' },
 ];
 
@@ -50,6 +54,8 @@ const ADMIN: NavItem[] = [
   { label: 'nav.users', icon: Users, to: '/admin/users' },
   { label: 'nav.exchange_rates', icon: Coins, to: '/admin/exchange-rates' },
   { label: 'nav.statement_lines', icon: ListOrdered, to: '/admin/statement-lines' },
+  { label: 'nav.document_types', icon: FileStack, to: '/admin/document-types' },
+  { label: 'nav.document_requirements', icon: ClipboardCheck, to: '/admin/document-requirements' },
   { label: 'nav.field_config', icon: SlidersHorizontal },
 ];
 

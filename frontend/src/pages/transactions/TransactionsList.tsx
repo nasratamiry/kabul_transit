@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { FileSpreadsheet, FileText, Pencil, Plus, Search, X } from 'lucide-react';
+import { FileSpreadsheet, FileText, FileWarning, Pencil, Plus, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router';
@@ -19,6 +19,7 @@ import { useApi } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { currentShamsiMonth, toGregorian, toShamsiKey } from '@/lib/date';
 import { toDariDigits, useDigitLocale } from '@/lib/digits';
+import { typeName, useDocumentTypes } from '@/lib/documents';
 import { useBranches } from '@/lib/finance';
 import { toastError, useDebounced } from '@/lib/hooks';
 import { formatMoney } from '@/lib/money';
@@ -42,6 +43,8 @@ const FILTERS = [
   'transport_company',
   'search',
   'has_documents',
+  'missing_documents',
+  'doc_type',
   'nonzero',
 ];
 
@@ -55,6 +58,7 @@ export function TransactionsList(): JSX.Element {
   const month = currentShamsiMonth();
   const [rateDialog, setRateDialog] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const docTypes = useDocumentTypes();
 
   const get = (k: string): string => params.get(k) ?? '';
   const dateFrom = get('date_from') || month.from;
@@ -106,6 +110,8 @@ export function TransactionsList(): JSX.Element {
     transport_company: get('transport_company') || undefined,
     search: get('search') || undefined,
     has_documents: get('has_documents') || undefined,
+    missing_documents: get('missing_documents') || undefined,
+    doc_type: get('doc_type') || undefined,
     nonzero: get('nonzero') || undefined,
     page,
     page_size: PAGE_SIZE,
@@ -211,16 +217,28 @@ export function TransactionsList(): JSX.Element {
       header: t('transactions.documents'),
       align: 'center',
       cell: (r) => (
-        <Link
-          to={`/transactions/${r.id}#documents`}
-          onClick={(e) => e.stopPropagation()}
-          aria-label={`${t('transactions.documents')}: ${d(r.documents_count)}`}
-          className="inline-flex items-center gap-1 rounded px-1 text-gray-600 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:text-gray-300"
-          data-testid="documents-link"
-        >
-          <FileText className="h-3.5 w-3.5" aria-hidden />
-          {d(r.documents_count)}
-        </Link>
+        <span className="inline-flex flex-col items-center gap-1">
+          <Link
+            to={`/transactions/${r.id}#documents`}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`${t('transactions.documents')}: ${d(r.documents_count)}`}
+            className="inline-flex items-center gap-1 rounded px-1 text-gray-600 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:text-gray-300"
+            data-testid="documents-link"
+          >
+            <FileText className="h-3.5 w-3.5" aria-hidden />
+            {d(r.documents_count)}
+          </Link>
+          {r.documents_status.missing.length > 0 && (
+            <Badge
+              tone="danger"
+              title={r.documents_status.missing.map(docTypes.name).join('، ')}
+              data-testid="missing-badge"
+            >
+              <FileWarning className="h-3 w-3" aria-hidden />
+              {t('documents.incomplete')}
+            </Badge>
+          )}
+        </span>
       ),
     },
     {
@@ -380,6 +398,28 @@ export function TransactionsList(): JSX.Element {
             { value: 'false', label: t('transactions.documents_none') },
           ]}
           data-testid="filter-documents"
+        />
+        <Select
+          value={get('missing_documents')}
+          onChange={(e) => setFilter('missing_documents', e.target.value)}
+          aria-label={t('documents.incomplete_filter')}
+          placeholder={t('documents.incomplete_any')}
+          options={[
+            { value: 'true', label: t('documents.incomplete_only') },
+            { value: 'false', label: t('documents.complete_only') },
+          ]}
+          data-testid="filter-missing-documents"
+        />
+        <Select
+          value={get('doc_type')}
+          onChange={(e) => setFilter('doc_type', e.target.value)}
+          aria-label={t('documents.has_type')}
+          placeholder={t('documents.has_type_any')}
+          options={docTypes.active.map((x) => ({
+            value: x.code,
+            label: typeName(x, i18n.language),
+          }))}
+          data-testid="filter-doc-type"
         />
         <div className="relative">
           <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />

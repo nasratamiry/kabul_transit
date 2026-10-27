@@ -7,7 +7,7 @@ scripts\run_all_checks.ps1 --skip-e2e   # backend scripts + typecheck / lint / b
 scripts\run_all_checks.ps1 --only e2e-stage10 e2e-stage11
 ```
 
-Runs the six backend verify scripts, typecheck, lint, build, and every E2E suite below with its
+Runs the seven backend verify scripts (incl. `verify_documents`), typecheck, lint, build, and every E2E suite below with its
 own setup and cleanup. Django and Vite are started on ports 8010 / 5183 (not 8000 / 5173, so a
 developer's servers are left alone) and are always stopped at the end, process tree included.
 Logs, screenshots and `summary.md` go to `checks-output/`. Stage 9 runs last (it locks the test
@@ -301,3 +301,21 @@ income statement page (IAS 1 sections, presets, custom range, loss in red parent
 to transactions / office expenses, missing-rate warnings, print view); Excel exports of the
 statement and of the filtered transactions list (RTL, frozen header, numeric cells, totals = API,
 branch scoping, logged to `logs/security.log`); English UI digits; no page errors.
+
+---
+
+# Customs documents — types, required documents, register
+
+```powershell
+cd "D:\Kabul Cargo TN"
+.venv\Scripts\python scripts\verify_documents.py                     # backend, 38 checks, rolled back
+cd frontend
+..\.venv\Scripts\python scripts\cleanup-documents.py --setup         # e2e_doc_admin / e2e_doc_mgr / e2e_doc_mgr2, E2EDOC*
+node scripts/verify-documents.mjs ..\documents_screenshots              # 30 checks
+node scripts/lighthouse-documents.mjs ..\documents_screenshots\lh      # accessibility, 5 pages, needs Vite :5183
+..\.venv\Scripts\python scripts\cleanup-documents.py                 # also E2EDOC3 and E2EDOC_* types, files, history
+```
+
+`run_all_checks` runs the E2E suite as `e2e-documents`. The fixture adds today's USD rate only when
+nobody has entered one, and removes only that one. Every upload now needs a `doc_type` (code, e.g.
+`OTHER`): stage 12b, `verify_api`, `verify_security` and `verify-prod` send one.

@@ -6,6 +6,7 @@ import { Link, useSearchParams } from 'react-router';
 
 import { AdminOverview } from '@/components/admin/AdminOverview';
 import { TodayRateBanner } from '@/components/admin/TodayRateBanner';
+import { MissingDocumentsTile } from '@/components/dashboard/MissingDocumentsTile';
 import { OfficeMonthTile } from '@/components/finance/OfficeMonthTile';
 import { TodayRateDialog } from '@/components/finance/TodayRateDialog';
 import { Badge } from '@/components/ui/Badge';
@@ -128,6 +129,7 @@ export function Dashboard(): JSX.Element {
           <TodayRateDialog open={rateDialog} onClose={() => setRateDialog(false)} />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <OfficeMonthTile />
+            <MissingDocumentsTile />
           </div>
         </div>
       )}
