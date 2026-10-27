@@ -7,6 +7,7 @@ import django_filters
 from django.conf import settings
 from django.db.models import Count
 from django.http import FileResponse, HttpResponse
+from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django_filters.rest_framework import DjangoFilterBackend, FilterSet
 from rest_framework import filters, viewsets
@@ -16,6 +17,8 @@ from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.response import Response
 
+from accounts.models import Branch
+from api.excel import transactions_workbook, xlsx_response
 from api.filters import ShamsiDateFilter, parse_any_date
 from api.history import HistoryMixin
 from api.mixins import PortScopedQuerysetMixin, own_branch_kwargs
@@ -23,7 +26,8 @@ from api.pagination import StandardPagination
 from api.permissions import IsBranchStaff
 from api.serializers import DocumentSerializer, TransactionSerializer
 from finance.utils import attach_usd_rates, kabul_today, require_todays_usd_rate
-from kabulcargo_backend.utils import normalize_digits, parse_decimal
+from kabulcargo_backend.security import log_event
+from kabulcargo_backend.utils import dual_date, normalize_digits, parse_decimal
 from operations.models import Document, Transaction
 
 _MONEY_FIELDS = ('customer_payment', *Transaction.EXPENSE_FIELDS)
@@ -40,11 +44,18 @@ def _decimal_or(value, default):
     return number if number.is_finite() else default
 
 
+MAX_EXPORT_ROWS = 20000
+
+
 class TransactionFilter(FilterSet):
     date = ShamsiDateFilter(field_name='date')
     date_from = ShamsiDateFilter(field_name='date', lookup_expr='gte')
     date_to = ShamsiDateFilter(field_name='date', lookup_expr='lte')
     has_documents = django_filters.BooleanFilter(method='filter_has_documents', label='دارای سند')
+    # Income-statement drill-down: rows where this money field (customer_payment or an expense) is non-zero.
+    nonzero = django_filters.ChoiceFilter(
+        method='filter_nonzero', label='فیلد غیر صفر',
+        choices=[(name, name) for name in ('customer_payment', *Transaction.EXPENSE_FIELDS)])
 
     class Meta:
         model = Transaction
@@ -53,6 +64,9 @@ class TransactionFilter(FilterSet):
     def filter_has_documents(self, queryset, name, value):
         # documents_count is annotated by TransactionViewSet.queryset
         return queryset.filter(documents_count__gt=0) if value else queryset.filter(documents_count=0)
+
+    def filter_nonzero(self, queryset, name, value):
+        return queryset.exclude(**{value: 0})
 
 
 class TransactionViewSet(HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -82,6 +96,30 @@ class TransactionViewSet(HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelVi
 
     def perform_update(self, serializer):
         serializer.save(**own_branch_kwargs(self.request.user))
+
+    @action(detail=False, methods=['get'])
+    def export(self, request):
+        """
+        GET /api/transactions/export/?<the list's filters> — every filtered row (not one page)
+        as .xlsx, with the list's own filters, search and branch scoping.
+        """
+        rows = list(self.filter_queryset(self.get_queryset())[:MAX_EXPORT_ROWS + 1])
+        if len(rows) > MAX_EXPORT_ROWS:
+            return Response({'detail': f'بیشتر از {MAX_EXPORT_ROWS} معامله؛ بازهٔ تاریخ را کوچک‌تر کنید.'},
+                            status=400)
+        attach_usd_rates(rows)
+        user, params = request.user, request.query_params
+        branch = normalize_digits(params.get('branch') or '')
+        if user.is_branch_manager:
+            branch_label = user.branch.name
+        elif branch.isdigit():
+            branch_label = Branch.objects.filter(pk=branch).values_list('name', flat=True).first() or branch
+        else:
+            branch_label = 'همهٔ بندرها'
+        period = f"\u200e{params.get('date_from') or '…'}\u200e تا \u200e{params.get('date_to') or '…'}\u200e"
+        content = transactions_workbook(rows, branch_label, period, dual_date(timezone.now()))
+        log_event('export', request, kind='transactions', rows=len(rows), query=params.urlencode()[:300])
+        return xlsx_response(content, f'transactions_{kabul_today()}.xlsx')
 
     @action(detail=False, methods=['post'], url_path='preview-summary')
     def preview_summary(self, request):

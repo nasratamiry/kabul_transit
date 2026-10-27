@@ -24,5 +24,7 @@ urlpatterns = [
     path('auth/me/', auth.me, name='api_me'),
     path('form-config/', config.FormConfigView.as_view(), name='api_form_config'),
     path('income-statement/', reports.IncomeStatementView.as_view(), name='api_income_statement'),
+    path('income-statement/export/', reports.IncomeStatementExportView.as_view(), name='api_income_statement_export'),
+    path('dashboard/summary/', reports.DashboardSummaryView.as_view(), name='api_dashboard_summary'),
     path('', include(router.urls)),
 ]

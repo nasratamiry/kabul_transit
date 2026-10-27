@@ -104,7 +104,24 @@
     "rate_missing": "Missing",
     "tile_traders": "Active traders",
     "tile_companies": "Active transport companies",
-    "tile_office_month": "Office expenses this month"
+    "tile_office_month": "Office expenses this month",
+    "net_profit": "Net profit",
+    "transactions": "Transactions",
+    "chart_title": "Daily net profit (AFN)",
+    "chart_hint": "Green = profit, red = loss. Hover a bar for details.",
+    "kpi_title": "This month vs last month",
+    "kpi_count": "Transactions",
+    "kpi_revenue": "Customer payments (revenue)",
+    "kpi_expenses": "Total expenses",
+    "kpi_net": "Net profit / loss",
+    "top_traders": "Top traders this month",
+    "no_traders": "No trader transactions this month",
+    "n_transactions": "{{n}} transactions",
+    "recent": "Recent transactions",
+    "no_recent": "No transactions yet",
+    "branch_comparison": "Branch comparison (this month)",
+    "empty_month": "Nothing recorded this month yet.",
+    "vs_last_month": "Last month: {{value}}"
   },
   "errors": {
     "network": "Could not reach the server. Check the connection.",
@@ -612,6 +629,36 @@
       "STATIONERY": "Stationery",
       "CREDIT": "Credit",
       "OTHER": "Other"
+    }
+  },
+  "reports": {
+    "title": "Income statement",
+    "description": "Revenue and expenses in IAS 1 form: revenue, cost of services, gross profit, operating expenses, net profit. Click a line to see its records.",
+    "print": "Print",
+    "excel": "Download Excel",
+    "period": "Period",
+    "date_from": "From",
+    "date_to": "To",
+    "branch": "Branch",
+    "all_branches": "All branches",
+    "generated_at": "Generated",
+    "warnings_title": "Report warnings",
+    "transactions_count": "{{n}} transactions",
+    "line": "Line",
+    "afn": "AFN",
+    "usd": "USD",
+    "section_total": "Total {{section}}",
+    "gross_profit": "Gross profit",
+    "net_profit": "Net profit / loss",
+    "drill_hint": "Click a line to open the records that make up the amount (same period and branch).",
+    "only_with_field": "Only transactions with «{{field}}»",
+    "remove_filter": "Remove filter",
+    "presets": {
+      "this_month": "This month",
+      "last_month": "Last month",
+      "this_quarter": "This quarter",
+      "this_year": "This year",
+      "custom": "Custom range"
     }
   }
 }

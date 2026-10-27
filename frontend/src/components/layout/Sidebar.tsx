@@ -30,7 +30,7 @@ interface NavItem {
 const MAIN: NavItem[] = [
   { label: 'nav.dashboard', icon: LayoutDashboard, to: '/dashboard' },
   { label: 'nav.transactions', icon: ArrowLeftRight, to: '/transactions' },
-  { label: 'nav.income_statement', icon: FileBarChart },
+  { label: 'nav.income_statement', icon: FileBarChart, to: '/reports/income-statement' },
 ];
 
 // Both roles; the API limits a branch manager to their own branch.

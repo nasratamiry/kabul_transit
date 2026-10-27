@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Pencil, Plus, Search, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FileSpreadsheet, FileText, Pencil, Plus, Search, X } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -19,12 +19,14 @@ import { useApi } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { currentShamsiMonth, toGregorian, toShamsiKey } from '@/lib/date';
 import { toDariDigits, useDigitLocale } from '@/lib/digits';
-import { useDebounced, useList } from '@/lib/hooks';
+import { useBranches } from '@/lib/finance';
+import { toastError, useDebounced } from '@/lib/hooks';
 import { formatMoney } from '@/lib/money';
 import { useTodayUsdRate } from '@/lib/rates';
+import { downloadFile } from '@/lib/reports';
 import { TRADE_TYPES, TX_KEY } from '@/lib/transactionSections';
 import { useAuth } from '@/stores/auth';
-import type { Branch, Paginated, Transaction } from '@/types/api';
+import type { Paginated, Transaction } from '@/types/api';
 
 import { TRADE_TONE } from './tradeTone';
 
@@ -40,6 +42,7 @@ const FILTERS = [
   'transport_company',
   'search',
   'has_documents',
+  'nonzero',
 ];
 
 export function TransactionsList(): JSX.Element {
@@ -51,6 +54,7 @@ export function TransactionsList(): JSX.Element {
   const [params, setParams] = useSearchParams();
   const month = currentShamsiMonth();
   const [rateDialog, setRateDialog] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const get = (k: string): string => params.get(k) ?? '';
   const dateFrom = get('date_from') || month.from;
@@ -98,6 +102,7 @@ export function TransactionsList(): JSX.Element {
     transport_company: get('transport_company') || undefined,
     search: get('search') || undefined,
     has_documents: get('has_documents') || undefined,
+    nonzero: get('nonzero') || undefined,
     page,
     page_size: PAGE_SIZE,
   };
@@ -106,11 +111,7 @@ export function TransactionsList(): JSX.Element {
     queryFn: () => api.get<Paginated<Transaction>>('/transactions/', { params: query }),
     placeholderData: (prev) => prev,
   });
-  const branches = useList<Branch>(['branches'], '/branches/');
-  const branchName = useMemo(
-    () => new Map((branches.data ?? []).map((b) => [b.id, b.name])),
-    [branches.data],
-  );
+  const { branches, name: branchName } = useBranches();
   const today = useTodayUsdRate();
   const rateMissing = !today.isPending && !today.rate;
   const anyFilter = FILTERS.some((k) => params.has(k));
@@ -151,7 +152,7 @@ export function TransactionsList(): JSX.Element {
           {
             key: 'branch',
             header: t('transactions.branch'),
-            cell: (r: Transaction) => branchName.get(r.branch) ?? '…',
+            cell: (r: Transaction) => branchName(r.branch),
           },
         ]
       : []),
@@ -230,6 +231,26 @@ export function TransactionsList(): JSX.Element {
     },
   ];
 
+  async function exportExcel(): Promise<void> {
+    // Every filtered row, not just this page.
+    const filters: Record<string, string | number | undefined> = { ...query };
+    delete filters.page;
+    delete filters.page_size;
+    setExporting(true);
+    try {
+      await downloadFile(
+        api,
+        '/transactions/export/',
+        filters,
+        `transactions_${query.date_from}_${query.date_to}.xlsx`,
+      );
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const addButton = (
     <Button
       onClick={() => navigate('/transactions/new')}
@@ -250,7 +271,18 @@ export function TransactionsList(): JSX.Element {
         description={t('transactions.description')}
         action={
           <div className="flex flex-col items-end gap-1">
-            {addButton}
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => void exportExcel()}
+                loading={exporting}
+                data-testid="export-transactions"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                {t('reports.excel')}
+              </Button>
+              {addButton}
+            </div>
             {rateMissing && (
               <p
                 id="no-rate-hint"
@@ -314,7 +346,7 @@ export function TransactionsList(): JSX.Element {
             onChange={(e) => setFilter('branch', e.target.value)}
             aria-label={t('transactions.branch')}
             placeholder={t('transactions.all_branches')}
-            options={(branches.data ?? []).map((b) => ({ value: b.id, label: b.name }))}
+            options={branches.map((b) => ({ value: b.id, label: b.name }))}
             data-testid="filter-branch"
           />
         )}
@@ -371,6 +403,25 @@ export function TransactionsList(): JSX.Element {
         </Button>
       </section>
 
+      {get('nonzero') && (
+        <p className="mb-3 flex flex-wrap items-center gap-2 text-sm" data-testid="nonzero-chip">
+          <span className="rounded-full bg-brand-light px-3 py-1 text-brand dark:bg-brand/30 dark:text-emerald-200">
+            {t('reports.only_with_field', {
+              field: i18n.exists(`form.${get('nonzero')}`)
+                ? t(`form.${get('nonzero')}`)
+                : get('nonzero'),
+            })}
+          </span>
+          <button
+            type="button"
+            onClick={() => setFilter('nonzero', null)}
+            className="inline-flex items-center gap-1 rounded px-1 text-gray-700 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:text-gray-300"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden />
+            {t('reports.remove_filter')}
+          </button>
+        </p>
+      )}
       <DataTable
         columns={columns}
         rows={list.data?.results}

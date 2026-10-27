@@ -326,3 +326,97 @@ export interface OfficeExpenseTotals extends AmountTotals {
   salary: AmountTotals;
   non_salary: AmountTotals;
 }
+
+/** Revenue / all expenses / net of a period (finance.reports._summary). */
+export interface PeriodSummary {
+  transactions_count: number;
+  revenue_afn: string | null;
+  revenue_usd: string | null;
+  expenses_afn: string | null;
+  expenses_usd: string | null;
+  net_profit_afn: string | null;
+  net_profit_usd: string | null;
+}
+
+export interface ReportPeriod {
+  from: string;
+  to: string;
+  from_gregorian: string;
+  to_gregorian: string;
+}
+
+/** GET /api/income-statement/ — amounts are 2-decimal strings, null when a rate is unknown. */
+export interface IncomeStatement {
+  period: ReportPeriod;
+  branch: { id: number; name: string; code: string } | null;
+  transactions_count: number;
+  lines: {
+    section: StatementSection;
+    section_label: string;
+    code: string;
+    label_fa: string;
+    label_en: string;
+    source_field: string;
+    amount_afn: string | null;
+    amount_usd: string | null;
+  }[];
+  totals: Record<
+    | 'revenue_afn'
+    | 'revenue_usd'
+    | 'cogs_afn'
+    | 'cogs_usd'
+    | 'gross_profit_afn'
+    | 'gross_profit_usd'
+    | 'opex_afn'
+    | 'opex_usd'
+    | 'other_afn'
+    | 'other_usd'
+    | 'net_profit_afn'
+    | 'net_profit_usd',
+    string | null
+  >;
+  summary: PeriodSummary;
+  warnings: string[];
+  /** Backend dual_date(): 'Shamsi | Gregorian'. */
+  generated_at: string;
+}
+
+/** GET /api/dashboard/summary/ */
+export interface DashboardSummary {
+  current: PeriodSummary & { period: ReportPeriod };
+  previous: PeriodSummary & { period: ReportPeriod };
+  daily: {
+    date: string;
+    date_gregorian: string;
+    net_profit_afn: string | null;
+    net_profit_usd: string | null;
+    transactions_count: number;
+  }[];
+  top_traders: {
+    id: number;
+    name: string;
+    transactions_count: number;
+    customer_payment_afn: string | null;
+    customer_payment_usd: string | null;
+  }[];
+  recent_transactions: {
+    id: number;
+    serial_number: string;
+    date: string;
+    date_gregorian: string;
+    trade_type: string;
+    status: string;
+    branch: string;
+    trader: string | null;
+    currency: string;
+    customer_payment: string;
+  }[];
+  today_rate: { date: string; currency: 'USD'; rate: string | null; is_set: boolean };
+  /** Super admin without ?branch= only: this month per branch. */
+  branches?: ({
+    branch: { id: number; name: string; code: string; is_active: boolean };
+  } & PeriodSummary)[];
+  branch: number | null;
+  warnings: string[];
+  generated_at: string;
+}

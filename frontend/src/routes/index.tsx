@@ -11,6 +11,7 @@ import { OfficeExpensesPage } from '@/pages/finance/OfficeExpensesPage';
 import { Login } from '@/pages/Login';
 import { Traders } from '@/pages/partners/Traders';
 import { TransportCompanies } from '@/pages/partners/TransportCompanies';
+import { IncomeStatementPage } from '@/pages/reports/IncomeStatement';
 import { NotFound } from '@/pages/NotFound';
 import { TradeTypePicker } from '@/pages/transactions/TradeTypePicker';
 import { TransactionDetail } from '@/pages/transactions/TransactionDetail';
@@ -63,6 +64,18 @@ export const router = createBrowserRouter([
           },
           { path: ':id', element: <TransactionDetail />, handle: crumb('detail.crumb') },
           { path: ':id/edit', element: <TransactionForm />, handle: crumb('common.edit') },
+        ],
+      },
+      {
+        // Both roles; a branch manager always gets their own branch (API).
+        path: 'reports',
+        handle: crumb('nav.income_statement', false),
+        children: [
+          {
+            path: 'income-statement',
+            element: <IncomeStatementPage />,
+            handle: crumb('reports.title'),
+          },
         ],
       },
       {

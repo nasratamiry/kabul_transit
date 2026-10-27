@@ -1,6 +1,5 @@
 asgiref==3.12.1
 bleach==6.4.0
-Django==5.2.18
 django-axes==8.3.1
 django-cors-headers==4.9.0
 django-csp==4.0
@@ -9,12 +8,15 @@ django-jalali==7.4.0
 django-jazzmin==3.0.5
 django-ratelimit==4.1.0
 django-simple-history==3.13.0
+Django==5.2.18
 djangorestframework==3.18.3
 djangorestframework_simplejwt==5.5.1
+et_xmlfile==2.0.0
 filetype==1.2.0
 jalali_core==1.0.0
 jdatetime==6.1.1
 mysqlclient==2.3.0
+openpyxl==3.1.5
 packaging==26.3
 pillow==13.0.0
 PyJWT==2.15.1

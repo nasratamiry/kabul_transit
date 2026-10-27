@@ -1,14 +1,15 @@
+import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '@/stores/auth';
-import type { Branch, OfficeExpenseCategory } from '@/types/api';
+import type { Branch, OfficeExpenseCategory, Paginated } from '@/types/api';
 
 import { useApi } from './api';
 import { currentShamsiMonth, toShamsiKey } from './date';
 import { normalizeNumber } from './digits';
-import { useDebounced, useList } from './hooks';
+import { useDebounced } from './hooks';
 import { formatMoney, type Currency } from './money';
 
 export const HAWALA_KEY = ['hawala'] as const;
@@ -113,9 +114,25 @@ export function useFinanceFilters(keys: string[]): FinanceFilters {
   };
 }
 
-/** Branch list and id → name (super admin lists and forms). */
+/**
+ * Branch list and id → name — the super admin's branch filters, columns and forms. A
+ * branch manager never needs it (the API scopes them to their branch), so it is not
+ * fetched for them; it is cached for 5 minutes (branches rarely change; saving one on the
+ * Branches page invalidates the 'branches' key). Every page asks for it, and the API
+ * allows each user 100 requests a minute.
+ */
 export function useBranches(): { branches: Branch[]; name(id: number): string } {
-  const list = useList<Branch>(['branches'], '/branches/');
+  const api = useApi();
+  const isSuperAdmin = useAuth((s) => s.user?.role === 'super_admin');
+  const list = useQuery({
+    queryKey: ['branches', {}],
+    queryFn: async () => {
+      const data = await api.get<Branch[] | Paginated<Branch>>('/branches/');
+      return Array.isArray(data) ? data : data.results;
+    },
+    enabled: isSuperAdmin,
+    staleTime: 5 * 60_000,
+  });
   const branches = list.data ?? [];
   return { branches, name: (id) => branches.find((b) => b.id === id)?.name ?? '…' };
 }

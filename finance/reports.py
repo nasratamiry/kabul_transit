@@ -10,7 +10,7 @@ from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 import jdatetime
-from django.db.models import DecimalField, F, Sum
+from django.db.models import Count, DecimalField, F, Sum
 
 from accounts.models import Branch
 from operations.models import Transaction
@@ -75,21 +75,47 @@ def _convert(amount, currency, rate_to_afn, day, usd_rates):
     return afn, usd
 
 
-def _transaction_amounts(fields, period, branch_id, usd_rates):
-    """{field: _Amount} summed over the period's transactions (grouped by date + currency in SQL)."""
-    totals = {field: _Amount() for field in fields}
-    if not fields:
-        return totals, 0
+class _Buckets:
+    """
+    Every amount of the period, kept per (branch id, date) and source: the income statement
+    sums them all; the dashboard also reads them per day and per branch. One calculation,
+    so the three views can never disagree.
+    """
+
+    def __init__(self):
+        self.amounts = {}  # (branch_id, date) → {source: _Amount}
+        self.counts = {}  # (branch_id, date) → transactions
+
+    def add(self, key, source, afn, usd):
+        self.amounts.setdefault(key, {}).setdefault(source, _Amount()).add(afn, usd)
+
+    def total(self, sources, keep=lambda key: True):
+        """{source: _Amount} over the buckets whose key passes `keep`."""
+        totals = {source: _Amount() for source in sources}
+        for key, bucket in self.amounts.items():
+            if keep(key):
+                for source, amount in bucket.items():
+                    if source in totals:
+                        totals[source].combine(amount)
+        return totals
+
+    def count(self, keep=lambda key: True):
+        return sum(n for key, n in self.counts.items() if keep(key))
+
+
+def _transaction_amounts(fields, period, branch_id, usd_rates, buckets):
+    """Transaction amounts into `buckets` (grouped by branch + date + currency in one SQL query)."""
     qs = Transaction.objects.filter(date__range=period)
     if branch_id:
         qs = qs.filter(branch_id=branch_id)
     big = DecimalField(max_digits=32, decimal_places=10)
-    annotations = {}
+    annotations = {'tx_count': Count('id')}
     for field in fields:
         annotations[f'{field}__raw'] = Sum(field)
         annotations[f'{field}__afn'] = Sum(F(field) * F('exchange_rate'), output_field=big)
-    count = qs.count()
-    for group in qs.values('date', 'currency').annotate(**annotations).order_by():
+    for group in qs.values('branch_id', 'date', 'currency').annotate(**annotations).order_by():
+        key = (group['branch_id'], group['date'])
+        buckets.counts[key] = buckets.counts.get(key, 0) + group['tx_count']
         for field in fields:
             raw = group[f'{field}__raw'] or Decimal('0')
             afn = raw if group['currency'] == AFN else (group[f'{field}__afn'] or Decimal('0'))
@@ -98,8 +124,7 @@ def _transaction_amounts(fields, period, branch_id, usd_rates):
             else:
                 usd_rate = usd_rates.on(group['date'])
                 usd = afn / usd_rate if usd_rate else None
-            totals[field].add(afn, usd)
-    return totals, count
+            buckets.add(key, field, afn, usd)
 
 
 def _record_afn_usd(record, amount, usd_rates):
@@ -141,18 +166,17 @@ def amount_totals(records, field='amount', group_by=None):
     }
 
 
-def _special_amounts(sources, period, branch_id, usd_rates, warnings):
-    """Office expenses (salary / everything else) and hawala fees, each converted at its own snapshot rate."""
-    totals = {source: _Amount() for source in sources}
+def _special_amounts(sources, period, branch_id, usd_rates, warnings, buckets):
+    """Office expenses (salary / everything else) and hawala fees into `buckets`, each at its own snapshot rate."""
     if '@office_expense' in sources or '@office_salary' in sources:
         expenses = OfficeExpense.objects.filter(date__range=period)
         if branch_id:
             expenses = expenses.filter(branch_id=branch_id)
         for expense in expenses:
             source = '@office_salary' if expense.category == OfficeExpense.Category.SALARY else '@office_expense'
-            if source in totals:
+            if source in sources:
                 converted, rate = _record_afn_usd(expense, expense.amount, usd_rates)
-                totals[source].add(*converted)
+                buckets.add((expense.branch_id, expense.date), source, *converted)
                 if expense.currency != AFN and rate is None:
                     warnings.append(f'مصرف دفتر شماره {expense.pk}: نرخ {expense.currency} برای {expense.date} نیست.')
     if '@hawala_fee' in sources:
@@ -161,17 +185,34 @@ def _special_amounts(sources, period, branch_id, usd_rates, warnings):
             hawalas = hawalas.filter(branch_id=branch_id)
         for hawala in hawalas:
             converted, rate = _record_afn_usd(hawala, hawala.fee, usd_rates)
-            totals['@hawala_fee'].add(*converted)
+            buckets.add((hawala.branch_id, hawala.date), '@hawala_fee', *converted)
             if hawala.currency != AFN and rate is None:
                 warnings.append(f'حوالهٔ شماره {hawala.pk}: نرخ {hawala.currency} برای {hawala.date} نیست.')
-    return totals
 
 
-def income_statement(branch_id=None, date_from=None, date_to=None):
+def _summary(lines, amounts, count):
+    """Revenue, expenses (COGS + OPEX + other) and net profit of {source: _Amount}, line by line as the statement adds them."""
+    revenue, expenses = _Amount(), _Amount()
+    for line in lines:
+        (revenue if line.section == StatementLine.Section.REVENUE else expenses).combine(amounts[line.source_field])
+    net = _Amount().combine(revenue).combine(expenses, sign=-1)
+    return {
+        'transactions_count': count,
+        'revenue_afn': _money(revenue.afn), 'revenue_usd': _money(revenue.usd),
+        'expenses_afn': _money(expenses.afn), 'expenses_usd': _money(expenses.usd),
+        'net_profit_afn': _money(net.afn), 'net_profit_usd': _money(net.usd),
+    }
+
+
+def income_statement(branch_id=None, date_from=None, date_to=None, breakdown=False):
     """
     The income statement for one branch (or all branches when branch_id is
     None) over a Shamsi period (default: the current Shamsi month). Dates are
     jdatetime.date. Aggregates on Transaction.date, not creation time.
+
+    breakdown=True adds `daily` (revenue / expenses / net for every day of the
+    period) and, for all branches, `branches` (the same per branch) — from the
+    very same amounts, so they always add up to the statement.
     """
     if date_from is None and date_to is None:
         date_from, date_to = current_shamsi_month()
@@ -182,8 +223,13 @@ def income_statement(branch_id=None, date_from=None, date_to=None):
     usd_rates = UsdRateTable(until=date_to)
     field_sources = [line.source_field for line in lines if line.source_field not in SPECIAL_SOURCES]
     special_sources = [line.source_field for line in lines if line.source_field in SPECIAL_SOURCES]
-    amounts, transaction_count = _transaction_amounts(field_sources, period, branch_id, usd_rates)
-    amounts.update(_special_amounts(special_sources, period, branch_id, usd_rates, warnings))
+    buckets = _Buckets()
+    if field_sources:
+        _transaction_amounts(field_sources, period, branch_id, usd_rates, buckets)
+    _special_amounts(special_sources, period, branch_id, usd_rates, warnings, buckets)
+    sources = field_sources + special_sources
+    amounts = buckets.total(sources)
+    transaction_count = buckets.count()
 
     lines.sort(key=lambda line: (SECTION_ORDER.index(line.section), line.sort_order, line.code))
     section_totals = {section: _Amount() for section in SECTION_ORDER}
@@ -214,7 +260,7 @@ def income_statement(branch_id=None, date_from=None, date_to=None):
                         + '، '.join(sorted(usd_rates.missing_dates)))
 
     branch = Branch.objects.filter(pk=branch_id).values('id', 'name', 'code').first() if branch_id else None
-    return {
+    report = {
         'period': {'from': str(date_from), 'to': str(date_to),
                    'from_gregorian': str(date_from.togregorian()), 'to_gregorian': str(date_to.togregorian())},
         'branch': branch,
@@ -229,4 +275,21 @@ def income_statement(branch_id=None, date_from=None, date_to=None):
             'net_profit_afn': _money(net.afn), 'net_profit_usd': _money(net.usd),
         },
         'warnings': warnings,
+        # Revenue / all expenses / net in one place (the dashboard's KPI shape).
+        'summary': _summary(lines, amounts, transaction_count),
     }
+    if breakdown:
+        report['daily'] = []
+        day = date_from
+        while day <= date_to:
+            on_day = (lambda d: lambda key: key[1] == d)(day)
+            report['daily'].append({'date': str(day), 'date_gregorian': str(day.togregorian()),
+                                    **_summary(lines, buckets.total(sources, on_day), buckets.count(on_day))})
+            day += timedelta(days=1)
+        if not branch_id:
+            report['branches'] = []
+            for b in Branch.objects.order_by('name').values('id', 'name', 'code', 'is_active'):
+                of_branch = (lambda i: lambda key: key[0] == i)(b['id'])
+                report['branches'].append({'branch': b, **_summary(lines, buckets.total(sources, of_branch),
+                                                                   buckets.count(of_branch))})
+    return report

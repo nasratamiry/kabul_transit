@@ -552,6 +552,88 @@ try:
               and other_history.status_code == 404,
               f'{blocked_h.status_code}/{blocked_e.status_code}, {history.data[0] if history.status_code == 200 else history.status_code}')
 
+        print('م) داشبورد و خروجی Excel')
+        from io import BytesIO  # noqa: E402
+
+        from django.db import connection  # noqa: E402
+        from django.test.utils import CaptureQueriesContext  # noqa: E402
+        from openpyxl import load_workbook  # noqa: E402
+
+        from finance.dashboard import previous_shamsi_month  # noqa: E402
+        from finance.reports import current_shamsi_month  # noqa: E402
+
+        month_from, month_to = current_shamsi_month()
+        prev_from, prev_to = previous_shamsi_month(month_from)
+        Transaction.objects.create(branch=branch_a, trade_type='IMPORT', serial_number='ZZ-DASH-1', date=month_from,
+                                   currency='AFN', customer_payment=Decimal('9000'), tariff_expense=Decimal('1500'))
+        Transaction.objects.create(branch=branch_a, trade_type='IMPORT', serial_number='ZZ-DASH-0', date=prev_from,
+                                   currency='AFN', customer_payment=Decimal('4000'), tariff_expense=Decimal('500'))
+        with CaptureQueriesContext(connection) as queries:
+            dash = client_a.get('/api/dashboard/summary/', {'branch': branch_b.id})
+        expected = income_statement(branch_id=branch_a.id, date_from=month_from, date_to=month_to)['summary']
+        expected_prev = income_statement(branch_id=branch_a.id, date_from=prev_from, date_to=prev_to)['summary']
+        current = {k: v for k, v in dash.data['current'].items() if k != 'period'}
+        previous = {k: v for k, v in dash.data['previous'].items() if k != 'period'}
+        daily_net = sum(Decimal(d['net_profit_afn']) for d in dash.data['daily'])
+        check(f'داشبورد مدیر بندر = گزارش عاید همان ماه و ماه قبل (بندر خودش، {len(queries)} کوئری)',
+              dash.status_code == 200 and current == expected and previous == expected_prev
+              and str(daily_net.quantize(Decimal('0.01'))) == expected['net_profit_afn']
+              and 'branches' not in dash.data and dash.data['branch'] == branch_a.id
+              and any('بندر خود' in w for w in dash.data['warnings']) and len(queries) <= 25,
+              f"current={current} expected={expected} daily={daily_net} queries={len(queries)}")
+
+        admin_dash = admin_client.get('/api/dashboard/summary/')
+        rows = {row['branch']['id']: row for row in admin_dash.data.get('branches', [])}
+        row_a = {k: v for k, v in rows.get(branch_a.id, {}).items() if k != 'branch'}
+        top = admin_client.get('/api/dashboard/summary/', {'branch': branch_a.id}).data
+        check('سوپر ادمین: ردیف مقایسهٔ هر بندر = گزارش همان بندر؛ با branch بدون مقایسه؛ تاجران برتر و آخرین معاملات',
+              admin_dash.status_code == 200 and row_a == expected and 'branches' not in top
+              and len(top['recent_transactions']) <= 10 and top['recent_transactions'][0]['serial_number']
+              and isinstance(top['top_traders'], list) and 'is_set' in top['today_rate'],
+              f"row_a={row_a} recent={len(top['recent_transactions'])}")
+
+        export = client_a.get('/api/income-statement/export/',
+                              {'date_from': str(month_from), 'date_to': str(month_to), 'branch': branch_b.id})
+        report = client_a.get('/api/income-statement/', {'date_from': str(month_from), 'date_to': str(month_to)}).data
+        ws = load_workbook(BytesIO(export.content)).active
+        cells = {ws.cell(row=r, column=2).value: ws.cell(row=r, column=3).value for r in range(5, ws.max_row + 1)}
+        codes = [ws.cell(row=r, column=1).value for r in range(5, ws.max_row + 1)
+                 if ws.cell(row=r, column=1).value and not str(ws.cell(row=r, column=1).value).startswith('⚠')]
+        net = cells.get('مفاد / ضرر خالص')
+        check('خروجی Excel گزارش عاید: RTL، عدد واقعی، سطرها و مفاد خالص = API، بندر خود مدیر',
+              export.status_code == 200 and export['Content-Type'].startswith('application/vnd.openxmlformats')
+              and ws.sheet_view.rightToLeft and ws.freeze_panes == 'A5'
+              and isinstance(net, Decimal | float | int) and f'{net:.2f}' == report['totals']['net_profit_afn']
+              and codes == [line['code'] for line in report['lines']] and branch_a.name in ws['A2'].value,
+              f"{export.status_code} net={net!r} vs {report['totals']['net_profit_afn']} codes={len(codes)}")
+
+        tx_export = client_a.get('/api/transactions/export/')
+        listed = results(client_a.get('/api/transactions/', {'page_size': 200}))
+        foreign = load_workbook(BytesIO(client_a.get('/api/transactions/export/', {'branch': branch_b.id}).content)).active
+        ws = load_workbook(BytesIO(tx_export.content)).active
+        data_rows = [r for r in ws.iter_rows(min_row=5, values_only=True)]
+        body, total = data_rows[:-1], data_rows[-1]
+        api_profit = sum(Decimal(r['row_summary']['profit_or_loss_afn']) for r in listed)
+        check('خروجی Excel معاملات: همهٔ ردیف‌های فیلترشده (نه یک صفحه)، فقط بندر خود، جمع مفاد = API',
+              tx_export.status_code == 200 and len(body) == len(listed)
+              and {r[0] for r in body} == {r['serial_number'] for r in listed}
+              and total[0] == 'جمع' and f'{total[-2]:.2f}' == f'{api_profit:.2f}'
+              and all(isinstance(r[12], Decimal | float | int) for r in body)
+              and foreign.max_row == 5,  # another branch's id: empty, like the list (title, header, totals row)
+              f"rows={len(body)} api={len(listed)} profit={total[-2]} vs {api_profit}")
+
+        tariff_rows = results(client_a.get('/api/transactions/', {'nonzero': 'tariff_expense', 'page_size': 200}))
+        bad_field = client_a.get('/api/transactions/', {'nonzero': 'branch'})
+        OfficeExpense.objects.create(branch=branch_a, date=today, category='SALARY', amount=Decimal('5'), currency='AFN')
+        OfficeExpense.objects.create(branch=branch_a, date=today, category='RENT', amount=Decimal('7'), currency='AFN')
+        salary = {r['category'] for r in results(client_a.get('/api/office-expenses/', {'kind': 'salary'}))}
+        others = {r['category'] for r in results(client_a.get('/api/office-expenses/', {'kind': 'non_salary'}))}
+        check('فیلترهای drill-down: nonzero=<فیلد> فقط ردیف‌های غیر صفر (فیلد ناشناخته ۴۰۰)؛ kind=salary / non_salary',
+              tariff_rows and all(Decimal(r['tariff_expense']) != 0 for r in tariff_rows)
+              and len(tariff_rows) < len(listed) and bad_field.status_code == 400
+              and salary == {'SALARY'} and others and 'SALARY' not in others,
+              f'tariff={len(tariff_rows)}/{len(listed)} bad={bad_field.status_code} salary={salary} others={others}')
+
         # Deleting a document (or its transaction) removes the stored file too, after the commit.
         from django.core.files.storage import default_storage  # noqa: E402
         gone = client_a.post('/api/documents/', {'transaction': tx_a.id, 'file': SimpleUploadedFile('حذفی.png', png)},

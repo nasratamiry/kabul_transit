@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { History, Pencil, Plus, Trash2 } from 'lucide-react';
+import { History, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useForm, useWatch } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
@@ -69,7 +69,7 @@ export function OfficeExpensesPage(): JSX.Element {
   const isNew = Boolean(useMatch(`${BASE}/new`));
   const editId = Number(useMatch(`${BASE}/:id/edit`)?.params.id) || null;
   const historyId = Number(useMatch(`${BASE}/:id/history`)?.params.id) || null;
-  const filters = useFinanceFilters(['currency', 'category']);
+  const filters = useFinanceFilters(['currency', 'category', 'kind']);
   const { name: branchName } = useBranches();
 
   const list = useQuery({
@@ -230,6 +230,25 @@ export function OfficeExpensesPage(): JSX.Element {
         />
       </FinanceFilterBar>
 
+      {filters.get('kind') && (
+        <p className="mb-3 flex flex-wrap items-center gap-2 text-sm" data-testid="kind-chip">
+          <span className="rounded-full bg-brand-light px-3 py-1 text-brand dark:bg-brand/30 dark:text-emerald-200">
+            {t(
+              filters.get('kind') === 'salary'
+                ? 'office_expenses.salary'
+                : 'office_expenses.non_salary',
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={() => filters.setFilter('kind', null)}
+            className="inline-flex items-center gap-1 rounded px-1 text-gray-700 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand dark:text-gray-300"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden />
+            {t('reports.remove_filter')}
+          </button>
+        </p>
+      )}
       {totals && (
         <section
           aria-label={t('office_expenses.summary_title')}

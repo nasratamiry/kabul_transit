@@ -151,35 +151,39 @@ await step(2, 'Hawala create (UI): Dari digits with «٫» and «٬», AFN', asy
 });
 
 let usdHawala;
-await step(3, 'Hawala in USD dated ten days ago: form shows that day’s rate; snapshot stored', async () => {
-  await mgr.goto(`${BASE}/finance/hawala/new?${period}`);
-  await mgr.fill('[data-testid=field-date]', toDari(tenDaysAgo));
-  await mgr.fill('[data-testid=field-from_party]', 'شرکت الف');
-  await mgr.fill('[data-testid=field-to_party]', 'شرکت ب');
-  await mgr.fill('[data-testid=field-amount]', '100');
-  await mgr.selectOption('[data-testid=field-currency]', 'USD');
-  await mgr.fill('[data-testid=field-fee]', '2');
-  await mgr.waitForFunction(() =>
-    document.querySelector('[data-testid=rate-note]')?.textContent.includes('۸۰'),
-  );
-  const note = await mgr.getByTestId('rate-note').textContent();
-  await submit(mgr);
-  await toast(mgr, 'حواله ثبت شد').waitFor();
-  await closedDrawer(mgr);
-  usdHawala = (await hawalaList(mgr)).results.find((r) => r.from_party === 'شرکت الف');
-  const row = await rows(mgr).filter({ hasText: 'شرکت الف' }).first().textContent();
-  check(
-    3,
-    'Hawala in USD dated ten days ago: form shows that day’s rate; snapshot stored',
-    note.includes('۸۰٫۰۰') &&
-      usdHawala?.rate_used === '80.00000000' &&
-      usdHawala.amount_afn === '8000.00' &&
-      usdHawala.fee_afn === '160.00' &&
-      row.includes('۸٬۰۰۰٫۰۰') &&
-      row.includes(toDari(tenDaysAgo)),
-    `${note} | ${JSON.stringify(usdHawala)}`,
-  );
-});
+await step(
+  3,
+  'Hawala in USD dated ten days ago: form shows that day’s rate; snapshot stored',
+  async () => {
+    await mgr.goto(`${BASE}/finance/hawala/new?${period}`);
+    await mgr.fill('[data-testid=field-date]', toDari(tenDaysAgo));
+    await mgr.fill('[data-testid=field-from_party]', 'شرکت الف');
+    await mgr.fill('[data-testid=field-to_party]', 'شرکت ب');
+    await mgr.fill('[data-testid=field-amount]', '100');
+    await mgr.selectOption('[data-testid=field-currency]', 'USD');
+    await mgr.fill('[data-testid=field-fee]', '2');
+    await mgr.waitForFunction(() =>
+      document.querySelector('[data-testid=rate-note]')?.textContent.includes('۸۰'),
+    );
+    const note = await mgr.getByTestId('rate-note').textContent();
+    await submit(mgr);
+    await toast(mgr, 'حواله ثبت شد').waitFor();
+    await closedDrawer(mgr);
+    usdHawala = (await hawalaList(mgr)).results.find((r) => r.from_party === 'شرکت الف');
+    const row = await rows(mgr).filter({ hasText: 'شرکت الف' }).first().textContent();
+    check(
+      3,
+      'Hawala in USD dated ten days ago: form shows that day’s rate; snapshot stored',
+      note.includes('۸۰٫۰۰') &&
+        usdHawala?.rate_used === '80.00000000' &&
+        usdHawala.amount_afn === '8000.00' &&
+        usdHawala.fee_afn === '160.00' &&
+        row.includes('۸٬۰۰۰٫۰۰') &&
+        row.includes(toDari(tenDaysAgo)),
+      `${note} | ${JSON.stringify(usdHawala)}`,
+    );
+  },
+);
 
 await step(4, 'Later rate change does not alter the stored hawala (snapshot)', async () => {
   const rate = (await api(admin, 'GET', `/exchange-rates/?date=${tenDaysAgo}&currency=USD`)).data;
@@ -208,10 +212,7 @@ await step(5, 'Hawala edit (fee) + history modal shows only the changed field', 
   await submit(mgr);
   await toast(mgr, 'حواله ذخیره شد').waitFor();
   await closedDrawer(mgr);
-  await rows(mgr)
-    .filter({ hasText: 'شرکت الف' })
-    .getByTestId('history-button')
-    .click();
+  await rows(mgr).filter({ hasText: 'شرکت الف' }).getByTestId('history-button').click();
   await mgr.getByTestId('history-modal').locator('li').first().waitFor();
   const text = await mgr.getByTestId('history-modal').textContent();
   const stored = (await api(mgr, 'GET', `/hawala/${usdHawala.id}/`)).data;
@@ -252,53 +253,61 @@ await step(6, 'Hawala totals footer = API totals (fee in AFN and USD)', async ()
 });
 
 // ================================ office expenses ================================
-await step(7, 'Office expense create (UI): rent ۳٬۰۰۰ AFN with person and bill number', async () => {
-  await mgr.goto(`${BASE}/finance/office-expenses?${period}`);
-  await mgr.click('[data-testid=add-record]');
-  await mgr.selectOption('[data-testid=field-category]', 'RENT');
-  await mgr.fill('[data-testid=field-amount]', '۳٬۰۰۰');
-  await mgr.fill('[data-testid=field-person]', 'صاحب خانه');
-  await mgr.fill('[data-testid=field-bill_number]', 'R-77');
-  await mgr.fill('[data-testid=field-description]', 'کرایهٔ ماه');
-  await submit(mgr);
-  await toast(mgr, 'مصرف دفتر ثبت شد').waitFor();
-  await closedDrawer(mgr);
-  const rec = (await officeList(mgr)).results.find((r) => r.bill_number === 'R-77');
-  const row = await rows(mgr).filter({ hasText: 'R-77' }).first().textContent();
-  check(
-    7,
-    'Office expense create (UI): rent ۳٬۰۰۰ AFN with person and bill number',
-    rec?.amount === '3000.00' &&
-      rec.currency === 'AFN' &&
-      rec.category === 'RENT' &&
-      row.includes('کرایه') &&
-      row.includes('صاحب خانه') &&
-      row.includes('۳٬۰۰۰٫۰۰'),
-    `${JSON.stringify(rec)} | ${row}`,
-  );
-});
+await step(
+  7,
+  'Office expense create (UI): rent ۳٬۰۰۰ AFN with person and bill number',
+  async () => {
+    await mgr.goto(`${BASE}/finance/office-expenses?${period}`);
+    await mgr.click('[data-testid=add-record]');
+    await mgr.selectOption('[data-testid=field-category]', 'RENT');
+    await mgr.fill('[data-testid=field-amount]', '۳٬۰۰۰');
+    await mgr.fill('[data-testid=field-person]', 'صاحب خانه');
+    await mgr.fill('[data-testid=field-bill_number]', 'R-77');
+    await mgr.fill('[data-testid=field-description]', 'کرایهٔ ماه');
+    await submit(mgr);
+    await toast(mgr, 'مصرف دفتر ثبت شد').waitFor();
+    await closedDrawer(mgr);
+    const rec = (await officeList(mgr)).results.find((r) => r.bill_number === 'R-77');
+    const row = await rows(mgr).filter({ hasText: 'R-77' }).first().textContent();
+    check(
+      7,
+      'Office expense create (UI): rent ۳٬۰۰۰ AFN with person and bill number',
+      rec?.amount === '3000.00' &&
+        rec.currency === 'AFN' &&
+        rec.category === 'RENT' &&
+        row.includes('کرایه') &&
+        row.includes('صاحب خانه') &&
+        row.includes('۳٬۰۰۰٫۰۰'),
+      `${JSON.stringify(rec)} | ${row}`,
+    );
+  },
+);
 
-await step(8, 'Office expense in PKR ten days ago: rate note 0.25, AFN equivalent 100', async () => {
-  await mgr.click('[data-testid=add-record]');
-  await mgr.fill('[data-testid=field-date]', toDari(tenDaysAgo));
-  await mgr.selectOption('[data-testid=field-category]', 'FUEL');
-  await mgr.fill('[data-testid=field-amount]', '۴۰۰');
-  await mgr.selectOption('[data-testid=field-currency]', 'PKR');
-  await mgr.waitForFunction(() =>
-    document.querySelector('[data-testid=rate-note]')?.textContent.includes('۰٫۲۵'),
-  );
-  await submit(mgr);
-  await toast(mgr, 'مصرف دفتر ثبت شد').waitFor();
-  await closedDrawer(mgr);
-  const rec = (await officeList(mgr)).results.find((r) => r.category === 'FUEL');
-  const row = await rows(mgr).filter({ hasText: 'تیل' }).first().textContent();
-  check(
-    8,
-    'Office expense in PKR ten days ago: rate note 0.25, AFN equivalent 100',
-    rec?.rate_used === '0.25000000' && rec.amount_afn === '100.00' && row.includes('۱۰۰٫۰۰'),
-    `${JSON.stringify(rec)} | ${row}`,
-  );
-});
+await step(
+  8,
+  'Office expense in PKR ten days ago: rate note 0.25, AFN equivalent 100',
+  async () => {
+    await mgr.click('[data-testid=add-record]');
+    await mgr.fill('[data-testid=field-date]', toDari(tenDaysAgo));
+    await mgr.selectOption('[data-testid=field-category]', 'FUEL');
+    await mgr.fill('[data-testid=field-amount]', '۴۰۰');
+    await mgr.selectOption('[data-testid=field-currency]', 'PKR');
+    await mgr.waitForFunction(() =>
+      document.querySelector('[data-testid=rate-note]')?.textContent.includes('۰٫۲۵'),
+    );
+    await submit(mgr);
+    await toast(mgr, 'مصرف دفتر ثبت شد').waitFor();
+    await closedDrawer(mgr);
+    const rec = (await officeList(mgr)).results.find((r) => r.category === 'FUEL');
+    const row = await rows(mgr).filter({ hasText: 'تیل' }).first().textContent();
+    check(
+      8,
+      'Office expense in PKR ten days ago: rate note 0.25, AFN equivalent 100',
+      rec?.rate_used === '0.25000000' && rec.amount_afn === '100.00' && row.includes('۱۰۰٫۰۰'),
+      `${JSON.stringify(rec)} | ${row}`,
+    );
+  },
+);
 
 await step(9, 'Salary in USD today (rate 70) and an API-created kitchen expense', async () => {
   await mgr.click('[data-testid=add-record]');
@@ -331,29 +340,33 @@ await step(9, 'Salary in USD today (rate 70) and an API-created kitchen expense'
   );
 });
 
-await step(10, 'Category summary strip: salary separate, non-salary and per category (AFN)', async () => {
-  await mgr.goto(`${BASE}/finance/office-expenses?${period}`);
-  await mgr.getByTestId('category-summary').waitFor();
-  await mgr.waitForFunction(
-    () => document.querySelector('[data-testid=summary-KITCHEN]') !== null,
-  );
-  const salary = await mgr.getByTestId('summary-salary-value-afn').textContent();
-  const nonSalary = await mgr.getByTestId('summary-non-salary-value-afn').textContent();
-  const fuel = await mgr.getByTestId('summary-FUEL-value-afn').textContent();
-  const rent = await mgr.getByTestId('summary-RENT-value-afn').textContent();
-  const salaryChipInGroups = await mgr.getByTestId('summary-SALARY').count();
-  await mgr.screenshot({ path: `${SHOTS}/office-expenses.png`, fullPage: true });
-  check(
-    10,
-    'Category summary strip: salary separate, non-salary and per category (AFN)',
-    salary.includes('۱۷٬۵۰۰٫۰۰') &&
-      nonSalary.includes('۳٬۶۰۰٫۵۰') &&
-      fuel.includes('۱۰۰٫۰۰') &&
-      rent.includes('۳٬۰۰۰٫۰۰') &&
-      salaryChipInGroups === 0,
-    `${salary} | ${nonSalary} | ${fuel} | ${rent}`,
-  );
-});
+await step(
+  10,
+  'Category summary strip: salary separate, non-salary and per category (AFN)',
+  async () => {
+    await mgr.goto(`${BASE}/finance/office-expenses?${period}`);
+    await mgr.getByTestId('category-summary').waitFor();
+    await mgr.waitForFunction(
+      () => document.querySelector('[data-testid=summary-KITCHEN]') !== null,
+    );
+    const salary = await mgr.getByTestId('summary-salary-value-afn').textContent();
+    const nonSalary = await mgr.getByTestId('summary-non-salary-value-afn').textContent();
+    const fuel = await mgr.getByTestId('summary-FUEL-value-afn').textContent();
+    const rent = await mgr.getByTestId('summary-RENT-value-afn').textContent();
+    const salaryChipInGroups = await mgr.getByTestId('summary-SALARY').count();
+    await mgr.screenshot({ path: `${SHOTS}/office-expenses.png`, fullPage: true });
+    check(
+      10,
+      'Category summary strip: salary separate, non-salary and per category (AFN)',
+      salary.includes('۱۷٬۵۰۰٫۰۰') &&
+        nonSalary.includes('۳٬۶۰۰٫۵۰') &&
+        fuel.includes('۱۰۰٫۰۰') &&
+        rent.includes('۳٬۰۰۰٫۰۰') &&
+        salaryChipInGroups === 0,
+      `${salary} | ${nonSalary} | ${fuel} | ${rent}`,
+    );
+  },
+);
 
 await step(11, 'Office totals footer = API totals; by currency listed', async () => {
   const data = await officeList(mgr);
@@ -371,32 +384,30 @@ await step(11, 'Office totals footer = API totals; by currency listed', async ()
   );
 });
 
-await step(12, 'Category filter (URL state): only salary rows, totals follow the filter', async () => {
-  await mgr.selectOption('[data-testid=filter-category]', 'SALARY');
-  await mgr.waitForURL(/category=SALARY/);
-  await mgr.waitForFunction(
-    () => document.querySelectorAll('tbody tr[tabindex]').length === 1,
-  );
-  const total = await mgr.getByTestId('total-amount-afn').textContent();
-  await mgr.reload();
-  await mgr.waitForFunction(
-    () => document.querySelectorAll('tbody tr[tabindex]').length === 1,
-  );
-  const kept = await mgr.locator('[data-testid=filter-category]').inputValue();
-  check(
-    12,
-    'Category filter (URL state): only salary rows, totals follow the filter',
-    total.includes('۱۷٬۵۰۰٫۰۰') && kept === 'SALARY',
-    `${total} kept=${kept}`,
-  );
-});
+await step(
+  12,
+  'Category filter (URL state): only salary rows, totals follow the filter',
+  async () => {
+    await mgr.selectOption('[data-testid=filter-category]', 'SALARY');
+    await mgr.waitForURL(/category=SALARY/);
+    await mgr.waitForFunction(() => document.querySelectorAll('tbody tr[tabindex]').length === 1);
+    const total = await mgr.getByTestId('total-amount-afn').textContent();
+    await mgr.reload();
+    await mgr.waitForFunction(() => document.querySelectorAll('tbody tr[tabindex]').length === 1);
+    const kept = await mgr.locator('[data-testid=filter-category]').inputValue();
+    check(
+      12,
+      'Category filter (URL state): only salary rows, totals follow the filter',
+      total.includes('۱۷٬۵۰۰٫۰۰') && kept === 'SALARY',
+      `${total} kept=${kept}`,
+    );
+  },
+);
 
 await step(13, 'Date-range filter: ten-days-ago records drop out of today-only range', async () => {
   await mgr.goto(`${BASE}/finance/office-expenses?date_from=${today}&date_to=${today}`);
   await mgr.getByTestId('totals').waitFor();
-  await mgr.waitForFunction(
-    () => document.querySelectorAll('tbody tr[tabindex]').length === 3,
-  );
+  await mgr.waitForFunction(() => document.querySelectorAll('tbody tr[tabindex]').length === 3);
   const fuelRows = await rows(mgr).filter({ hasText: 'تیل' }).count();
   const hw = await hawalaList(mgr, `date_from=${today}&date_to=${today}`);
   check(
@@ -424,36 +435,44 @@ await step(14, 'Validation: bad amount and missing parties stay in the form', as
 });
 
 // ================================ branch scoping ================================
-await step(15, 'Branch manager B sees none of branch A’s records (list and direct id)', async () => {
-  const listB = await officeList(mgrB);
-  const hwB = await hawalaList(mgrB);
-  const direct = await api(mgrB, 'GET', `/hawala/${usdHawala.id}/`);
-  await mgrB.goto(`${BASE}/finance/hawala/${usdHawala.id}/edit`);
-  await mgrB.waitForFunction(() => document.body.textContent.includes('پیدا نشد'));
-  check(
-    15,
-    'Branch manager B sees none of branch A’s records (list and direct id)',
-    listB.count === 0 && hwB.count === 0 && direct.status === 404,
-    `office=${listB.count} hawala=${hwB.count} direct=${direct.status}`,
-  );
-});
+await step(
+  15,
+  'Branch manager B sees none of branch A’s records (list and direct id)',
+  async () => {
+    const listB = await officeList(mgrB);
+    const hwB = await hawalaList(mgrB);
+    const direct = await api(mgrB, 'GET', `/hawala/${usdHawala.id}/`);
+    await mgrB.goto(`${BASE}/finance/hawala/${usdHawala.id}/edit`);
+    await mgrB.waitForFunction(() => document.body.textContent.includes('پیدا نشد'));
+    check(
+      15,
+      'Branch manager B sees none of branch A’s records (list and direct id)',
+      listB.count === 0 && hwB.count === 0 && direct.status === 404,
+      `office=${listB.count} hawala=${hwB.count} direct=${direct.status}`,
+    );
+  },
+);
 
-await step(16, 'Branch manager cannot create for another branch (saved to own branch)', async () => {
-  const r = await api(mgrB, 'POST', '/office-expenses/', {
-    branch: A,
-    date: today,
-    category: 'OTHER',
-    amount: '10',
-    currency: 'AFN',
-  });
-  const seenByA = (await officeList(mgr)).results.some((x) => x.id === r.data.id);
-  check(
-    16,
-    'Branch manager cannot create for another branch (saved to own branch)',
-    r.status === 201 && r.data.branch === B && !seenByA,
-    `${r.status} branch=${r.data.branch}`,
-  );
-});
+await step(
+  16,
+  'Branch manager cannot create for another branch (saved to own branch)',
+  async () => {
+    const r = await api(mgrB, 'POST', '/office-expenses/', {
+      branch: A,
+      date: today,
+      category: 'OTHER',
+      amount: '10',
+      currency: 'AFN',
+    });
+    const seenByA = (await officeList(mgr)).results.some((x) => x.id === r.data.id);
+    check(
+      16,
+      'Branch manager cannot create for another branch (saved to own branch)',
+      r.status === 201 && r.data.branch === B && !seenByA,
+      `${r.status} branch=${r.data.branch}`,
+    );
+  },
+);
 
 await step(17, 'Super admin: all branches, branch column, branch filter', async () => {
   await admin.goto(`${BASE}/finance/office-expenses?${period}`);
@@ -473,25 +492,29 @@ await step(17, 'Super admin: all branches, branch column, branch filter', async 
 });
 
 // ================================ consistency ================================
-await step(18, 'Consistency: page totals = income statement OPEX_OFFICE / OPEX_SALARY / OPEX_HAWALA_FEE', async () => {
-  const office = (await officeList(mgr)).totals;
-  const hawala = (await hawalaList(mgr)).totals;
-  const report = (
-    await api(admin, 'GET', `/income-statement/?branch=${A}&${period}`)
-  ).data;
-  const line = (code) => report.lines.find((l) => l.code === code);
-  const pairs = [
-    [line('OPEX_OFFICE'), office.non_salary],
-    [line('OPEX_SALARY'), office.salary],
-    [line('OPEX_HAWALA_FEE'), hawala.fee],
-  ];
-  check(
-    18,
-    'Consistency: page totals = income statement OPEX_OFFICE / OPEX_SALARY / OPEX_HAWALA_FEE',
-    pairs.every(([l, tot]) => l && l.amount_afn === tot.afn && l.amount_usd === tot.usd),
-    pairs.map(([l, tot]) => `${l?.code}: ${l?.amount_afn}/${tot.afn} ${l?.amount_usd}/${tot.usd}`).join(' | '),
-  );
-});
+await step(
+  18,
+  'Consistency: page totals = income statement OPEX_OFFICE / OPEX_SALARY / OPEX_HAWALA_FEE',
+  async () => {
+    const office = (await officeList(mgr)).totals;
+    const hawala = (await hawalaList(mgr)).totals;
+    const report = (await api(admin, 'GET', `/income-statement/?branch=${A}&${period}`)).data;
+    const line = (code) => report.lines.find((l) => l.code === code);
+    const pairs = [
+      [line('OPEX_OFFICE'), office.non_salary],
+      [line('OPEX_SALARY'), office.salary],
+      [line('OPEX_HAWALA_FEE'), hawala.fee],
+    ];
+    check(
+      18,
+      'Consistency: page totals = income statement OPEX_OFFICE / OPEX_SALARY / OPEX_HAWALA_FEE',
+      pairs.every(([l, tot]) => l && l.amount_afn === tot.afn && l.amount_usd === tot.usd),
+      pairs
+        .map(([l, tot]) => `${l?.code}: ${l?.amount_afn}/${tot.afn} ${l?.amount_usd}/${tot.usd}`)
+        .join(' | '),
+    );
+  },
+);
 
 // ================================ delete ================================
 await step(19, 'Delete with confirm (hawala) — gone from list and API', async () => {
@@ -538,36 +561,44 @@ await step(20, '428 on create for both (API) when today’s USD rate is missing'
   );
 });
 
-await step(21, '428 in the form: manager enters today’s rate, the save is retried automatically', async () => {
-  await mgr.goto(`${BASE}/finance/office-expenses/new`);
-  await mgr.selectOption('[data-testid=field-category]', 'STATIONERY');
-  await mgr.fill('[data-testid=field-amount]', '۲۵۰');
-  await mgr.fill('[data-testid=field-bill_number]', 'ST-428');
-  await submit(mgr);
-  await mgr.getByTestId('rate-missing-panel').waitFor();
-  await mgr.screenshot({ path: `${SHOTS}/rate-missing.png` });
-  await mgr.click('[data-testid=rate-missing-cta]');
-  await mgr.getByTestId('today-rate-dialog').waitFor();
-  await mgr.fill('[data-testid=today-rate-input]', '۷۰٫۵');
-  await mgr.click('[data-testid=today-rate-save]');
-  await toast(mgr, 'مصرف دفتر ثبت شد').waitFor({ timeout: 10000 });
-  await closedDrawer(mgr);
-  const rec = (await officeList(mgr, `date=${today}`)).results.find((r) => r.bill_number === 'ST-428');
-  const rate = (await api(mgr, 'GET', `/exchange-rates/?date=${today}&currency=USD`)).data;
-  const stored = (Array.isArray(rate) ? rate : rate.results)[0];
-  check(
-    21,
-    '428 in the form: manager enters today’s rate, the save is retried automatically',
-    rec?.amount === '250.00' && stored?.rate === '70.50000000',
-    `${JSON.stringify(rec)} | rate=${stored?.rate}`,
-  );
-});
+await step(
+  21,
+  '428 in the form: manager enters today’s rate, the save is retried automatically',
+  async () => {
+    await mgr.goto(`${BASE}/finance/office-expenses/new`);
+    await mgr.selectOption('[data-testid=field-category]', 'STATIONERY');
+    await mgr.fill('[data-testid=field-amount]', '۲۵۰');
+    await mgr.fill('[data-testid=field-bill_number]', 'ST-428');
+    await submit(mgr);
+    await mgr.getByTestId('rate-missing-panel').waitFor();
+    await mgr.screenshot({ path: `${SHOTS}/rate-missing.png` });
+    await mgr.click('[data-testid=rate-missing-cta]');
+    await mgr.getByTestId('today-rate-dialog').waitFor();
+    await mgr.fill('[data-testid=today-rate-input]', '۷۰٫۵');
+    await mgr.click('[data-testid=today-rate-save]');
+    await toast(mgr, 'مصرف دفتر ثبت شد').waitFor({ timeout: 10000 });
+    await closedDrawer(mgr);
+    const rec = (await officeList(mgr, `date=${today}`)).results.find(
+      (r) => r.bill_number === 'ST-428',
+    );
+    const rate = (await api(mgr, 'GET', `/exchange-rates/?date=${today}&currency=USD`)).data;
+    const stored = (Array.isArray(rate) ? rate : rate.results)[0];
+    check(
+      21,
+      '428 in the form: manager enters today’s rate, the save is retried automatically',
+      rec?.amount === '250.00' && stored?.rate === '70.50000000',
+      `${JSON.stringify(rec)} | rate=${stored?.rate}`,
+    );
+  },
+);
 
 // ================================ dashboard ================================
 await step(22, 'Dashboard tile «مصارف دفتر این ماه» — branch manager (own branch)', async () => {
   await mgr.goto(`${BASE}/dashboard`);
   await mgr.getByTestId('tile-office-month-value').waitFor();
-  const month = await mgr.evaluate(async () => (await import('/src/lib/date.ts')).currentShamsiMonth());
+  const month = await mgr.evaluate(async () =>
+    (await import('/src/lib/date.ts')).currentShamsiMonth(),
+  );
   const data = await officeList(mgr, `date_from=${month.from}&date_to=${month.to}`);
   const value = await mgr.getByTestId('tile-office-month-value').textContent();
   const label = await mgr.getByTestId('tile-office-month').textContent();
@@ -582,7 +613,9 @@ await step(22, 'Dashboard tile «مصارف دفتر این ماه» — branch 
 await step(23, 'Dashboard tile — super admin (all branches) links to the page', async () => {
   await admin.goto(`${BASE}/dashboard`);
   await admin.getByTestId('tile-office-month-value').waitFor();
-  const month = await admin.evaluate(async () => (await import('/src/lib/date.ts')).currentShamsiMonth());
+  const month = await admin.evaluate(async () =>
+    (await import('/src/lib/date.ts')).currentShamsiMonth(),
+  );
   const data = await officeList(admin, `date_from=${month.from}&date_to=${month.to}`);
   const value = await admin.getByTestId('tile-office-month-value').textContent();
   const href = await admin.getByTestId('tile-office-month').getAttribute('href');

@@ -1,4 +1,4 @@
-from django_filters.rest_framework import DjangoFilterBackend, FilterSet
+from django_filters.rest_framework import ChoiceFilter, DjangoFilterBackend, FilterSet
 from rest_framework import filters, viewsets
 from rest_framework.exceptions import PermissionDenied
 
@@ -35,10 +35,17 @@ class OfficeExpenseFilter(FilterSet):
     date = ShamsiDateFilter(field_name='date')
     date_from = ShamsiDateFilter(field_name='date', lookup_expr='gte')
     date_to = ShamsiDateFilter(field_name='date', lookup_expr='lte')
+    # Income-statement drill-down: OPEX_SALARY = salary, OPEX_OFFICE = everything else.
+    kind = ChoiceFilter(method='filter_kind', label='معاش / غیر معاش',
+                        choices=[('salary', 'معاش'), ('non_salary', 'غیر معاش')])
 
     class Meta:
         model = OfficeExpense
         fields = ['branch', 'category', 'currency']
+
+    def filter_kind(self, queryset, name, value):
+        salary = OfficeExpense.Category.SALARY
+        return queryset.filter(category=salary) if value == 'salary' else queryset.exclude(category=salary)
 
 
 class ExchangeRateViewSet(viewsets.ModelViewSet):

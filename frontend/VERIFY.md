@@ -263,3 +263,22 @@ the income statement's OPEX_OFFICE / OPEX_SALARY / OPEX_HAWALA_FEE; 428 on creat
 form's enter-today's-rate-then-retry flow; dashboard tile «مصارف دفتر این ماه» for both roles.
 
 Each user may make 100 API requests a minute (stage 7 throttle); the script stays under it.
+
+---
+
+# Stage 14 — dashboard, income statement page, Excel exports
+
+```powershell
+cd "D:\Kabul Cargo TN\frontend"
+..\.venv\Scripts\python scripts\cleanup-stage14.py --setup   # e2e_admin, e2e_mgr, e2e_mgr_b, E2E14A/B/C, USD 70, transactions this/last month
+node scripts/verify-stage14.mjs ..\stage14_screenshots
+..\.venv\Scripts\python scripts\cleanup-stage14.py           # removes records, rates and their history
+```
+
+25 checks: dashboard KPIs equal this month's income statement (own branch for a branch manager,
+`?branch=` of another branch ignored); previous-month comparison; daily net-profit chart and its
+tooltip (Shamsi + Gregorian); top traders and recent transactions; super admin branch comparison;
+income statement page (IAS 1 sections, presets, custom range, loss in red parentheses, drill-down
+to transactions / office expenses, missing-rate warnings, print view); Excel exports of the
+statement and of the filtered transactions list (RTL, frozen header, numeric cells, totals = API,
+branch scoping, logged to `logs/security.log`); English UI digits; no page errors.

@@ -63,11 +63,20 @@ const api = (page, method, url, body, { token = true } = {}) =>
     async ({ method, url, body, token }) => {
       const headers = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${localStorage.getItem('kc.access')}`;
-      const r = await fetch(url.startsWith('/api') ? url : `/api${url}`, {
-        method,
-        headers,
-        body: body ? JSON.stringify(body) : undefined,
-      });
+      const send = () =>
+        fetch(url.startsWith('/api') ? url : `/api${url}`, {
+          method,
+          headers,
+          body: body ? JSON.stringify(body) : undefined,
+        });
+      let r = await send();
+      // The API allows each user 100 requests a minute (stage 7); this suite runs close to
+      // that, so a 429 waits the server's Retry-After once and retries.
+      if (r.status === 429) {
+        const wait = Math.min(Number(r.headers.get('retry-after')) || 30, 65);
+        await new Promise((done) => setTimeout(done, wait * 1000));
+        r = await send();
+      }
       const type = r.headers.get('content-type') ?? '';
       const raw = new Uint8Array(await r.arrayBuffer());
       const text = new TextDecoder().decode(raw);

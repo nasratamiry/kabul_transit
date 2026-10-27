@@ -16,6 +16,11 @@ export default defineConfig({
               test: /node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/,
             },
             { name: 'date', test: /node_modules[\\/](jalali-moment|moment)[\\/]/ },
+            // Only the dashboard chart needs these; fetched lazily with it.
+            {
+              name: 'charts',
+              test: /node_modules[\\/](recharts|recharts-scale|victory-vendor|d3-[a-z-]+|internmap|react-smooth|lodash|decimal\.js-light|eventemitter3|fast-equals|tiny-invariant)[\\/]/,
+            },
             { name: 'vendor', test: /node_modules[\\/]/ },
           ],
         },

@@ -143,8 +143,7 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
 - [x] مرحلهٔ ۳: Transaction + Document (منطق یگانه عاید)؛ `exchange_rate` با ۸ رقم اعشار
 - [x] مرحلهٔ ۴: ExchangeRate + Hawala + OfficeExpense + قفل نرم نرخ روز
   - قفل نرم فعلاً فقط در پنل ادمین (ریدایرکت به فورم نرخ)؛ API (HTTP 428) در مرحلهٔ ۶
-  - [ ] باقی‌مانده: `Transaction.fee_per_dollar_afn` برای ارزهای غیر دالر از
-    ExchangeRate خوانده شود (فعلاً None است)
+  - [x] `Transaction.fee_per_dollar_afn` برای ارزهای غیر دالر = نرخ دالرِ تاریخِ معامله (مرحلهٔ ۱۲ب)
 - [x] مرحلهٔ ۵: FieldConfig با sort_order و seed command
   - بندر جدید خودکار ۱۷۲ ردیف FieldConfig می‌گیرد (signal در `config/signals.py`).
     دستور `seed_field_config` فقط برای بندرهای قدیمی یا بعد از اضافه شدن فیلد
@@ -172,4 +171,59 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
   - دالر: معاملهٔ دالری = مبلغ خودش؛ ارزهای دیگر = افغانی ÷ نرخ دالرِ تاریخِ معامله
     (یا آخرین نرخ قبل از آن). هرگز نرخ امروز.
   - آزمایش: `.venv\Scripts\python scripts\verify_statement.py` (۳۶ تست)
+- [x] مرحلهٔ ۹: پایهٔ فرانت (`frontend/`: Vite + React 18 + TS + Tailwind 3 + i18n fa/ps/en + JWT)
+  - dev: `npm run dev` روی :5173، `/api` به :8000 proxy می‌شود (CORS لازم نیست).
+  - آزمایش: `frontend/VERIFY.md` → `npm run verify:e2e` (۲۱ تست، Edge + playwright-core).
+  - ESLint 9 flat config؛ `className` فقط با `cn()`. فیلد عددی = `<Input inputMode="decimal">`.
+- [x] مرحلهٔ ۱۰: صفحه‌های سوپر ادمین (بندرها، کاربران، نرخ اسعار، سطرهای گزارش) + `/api/users/<id>/unlock/`
+  - primitiveهای مشترک در `frontend/src/components/ui/` (DataTable، Drawer، Modal، ConfirmDialog،
+    DateInput شمسی، FormField…) و hooks در `src/lib/hooks.ts` — صفحه‌های بعدی از همین‌ها بسازند.
+  - drawer هر فورم یک URL دارد (child route بدون element؛ صفحه با `useMatch` می‌خواند).
+  - حذفِ رکورد محافظت‌شده (`on_delete=PROTECT`) → HTTP 409 با پیام دری، نه 500.
+  - choices از DRF `OPTIONS` خوانده می‌شود؛ برای همین `server.cors: false` در Vite لازم است.
+  - آزمایش: `frontend/VERIFY.md` → `scripts/verify-stage10.mjs` (۳۰ تست) + `cleanup-stage10.py`.
+- [x] مرحلهٔ ۱۱: صفحه‌های شرکا (تاجران، شرکت‌های ترانسپورت) برای هر دو نقش
+  - `components/partners/PartnerPage.tsx` با config (endpoint، ns، fields) — نوع تازهٔ شریک = یک صفحهٔ ~۲۰ خطی.
+  - DataTable حالا ستون قابل مرتب‌سازی دارد (`sortable` + `sort`/`onSort`؛ مرتب‌سازی در صفحه).
+  - API تاریخچه برای Trader/TransportCompany ندارد (مدل دارد). POST `/transactions/` حتی از مدیر بندر `branch` می‌خواهد.
+  - آزمایش: `cleanup-stage11.py --setup` → `verify-stage11.mjs` (۲۰ تست) → `cleanup-stage11.py`.
+- [x] مرحلهٔ ۱۲الف: فهرست معاملات + فورم پویا (`frontend/src/pages/transactions/`)
+  - `lib/transactionSections.ts` منبع واحد نوع و بخش ۴۳ فیلد؛ form-config فقط نمایش/لازم/ترتیب را تعیین می‌کند.
+  - `POST /api/transactions/preview-summary/` خلاصهٔ ردیف فورم ذخیره‌نشده (از propertyهای خود مدل).
+  - فهرست معاملات (فقط همین) pagination دارد: `{count, next, previous, results}`، ۲۵ تایی.
+  - «عواید استراس/ترانسپورت» در UI هم مصرف حساب می‌شوند (قانون یگانه عاید).
+  - آزمایش: `cleanup-stage12a.py --setup` → `verify-stage12a.mjs` (۳۴ تست) → `cleanup-stage12a.py`.
+    همهٔ cleanup ها حالا تاریخچهٔ دادهٔ آزمایشی را هم پاک می‌کنند (`scripts/e2e_history.py`).
+- [x] مرحلهٔ ۱۲ب: جزئیات معامله، اسناد، معادل دالری، ثبت نرخ امروز توسط مدیر بندر
+  - نرخ دالر یک تاریخ فقط از `finance.utils.usd_rate_on` / `UsdRateTable` (گزارش عاید و مدل هر دو).
+    فهرست‌ها با `attach_usd_rates` نرخ‌ها را یکجا بار می‌کنند (بدون N+1).
+  - فایل سند فقط از `GET /api/documents/<id>/download/`؛ API نشانی `/media/` نمی‌دهد. production:
+    `DOCUMENT_X_ACCEL_PREFIX` + `deploy/nginx-documents.conf` (`/media/` عمومی نیست). حذف سند فایل را هم پاک می‌کند.
+  - `api/history.py` → `HistoryMixin` (فقط فیلدهای تغییرکرده) روی معامله، تاجر، شرکت، حواله، مصرف دفتر.
+  - مدیر بندر فقط نرخ امروز را می‌سازد؛ ویرایش/حذف نرخ فقط سوپر ادمین. حذف معامله: هر دو نقش (بندر خود).
+  - آزمایش: `cleanup-stage12b.py --setup` → `verify-stage12b.mjs` (۲۱) → `cleanup-stage12b.py`.
+- [x] مرحلهٔ ۱۳: صفحه‌های مالی (حواله‌ها، مصارف دفتر) برای هر دو نقش
+  - لیست‌های حواله / مصارف دفتر صفحه‌بندی (`api/pagination.py`) و بلوک `totals` دارند؛ جمع‌ها با
+    `finance.reports.amount_totals` (همان تبدیل گزارش عاید) — هر دو همیشه برابرند.
+  - API تاریخچه (`api/history.py`) مقایسه را خودش می‌کند؛ `diff_against` روی فیلد غیرقابل‌ویرایش
+    مثل `rate_used` خطا می‌دهد.
+  - hook/ثابت‌های مالی در `src/lib/finance.ts`؛ کمپوننت‌ها در `components/finance/shared.tsx`
+    (فیلتر، RateNote، RateLockPanel برای ۴۲۸، HistoryModal). `useDayRate` در `lib/rates.ts`.
+  - API برای هر کاربر ۱۰۰ درخواست در دقیقه (مرحلهٔ ۷)؛ اسکریپت‌های E2E باید زیر آن بمانند.
+  - آزمایش: `cleanup-stage13.py --setup` → `verify-stage13.mjs` (۲۵ تست) → `cleanup-stage13.py`.
+- [x] مرحلهٔ ۱۴: داشبورد، صفحهٔ گزارش عاید، خروجی Excel
+  - `GET /api/dashboard/summary/` (`finance/dashboard.py`) — همهٔ ارقام از `income_statement`؛ داشبورد و گزارش هرگز فرق ندارند.
+  - Excel: `api/excel.py` (openpyxl) → `/api/income-statement/export/` و `/api/transactions/export/` (همهٔ ردیف‌های فیلترشده)؛ هر خروجی در لاگ امنیتی.
+  - آزمایش: `cleanup-stage14.py --setup` → `verify-stage14.mjs` (۲۵ تست) → `cleanup-stage14.py`.
 - [ ] فاز دوم: Transaction، FieldConfig، نرخ، فرانت (بعد از رسیدن اکسل جدید)
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- When graphify-out/graph.json exists, run `graphify query "<question>"` before your first grep, search or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.
