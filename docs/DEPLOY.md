@@ -3,18 +3,23 @@
 این راهنما برای کسی است که سیستم را روی سرور نصب و نگهداری می‌کند (شما یا متخصص IT شما).
 همه چیز با **Docker** اجرا می‌شود: یک بار نصب، بعد با چند دستور ساده به‌روز می‌شود.
 
+> **نصب روی Coolify (سرور مشترک با Donya):** راهنمای قدم‌به‌قدم جداگانه دارد:
+> [`docs/DEPLOY_COOLIFY.md`](DEPLOY_COOLIFY.md). این فایل برای VPS ساده (بدون Coolify) است؛ بخش‌های
+> کار روزانه، بک‌اپ و بازیابی برای هر دو یکی است (در Coolify دستورها را در Terminal سرویس
+> `kabulcargo_backend` بدون `kc exec kabulcargo_backend` بنویسید).
+
 ---
 
 ## ۱. سیستم از چه بخش‌هایی ساخته شده
 
 | بخش | کار آن |
 | --- | --- |
-| **nginx** | صفحهٔ برنامه را به مرورگر می‌دهد و درخواست‌ها را به Django می‌فرستد. فایل اسناد را فقط بعد از اجازهٔ Django می‌دهد. |
-| **backend** (Django + gunicorn) | همهٔ منطق: ورود، معاملات، گزارش‌ها، پنل `/admin/`. |
-| **mysql** (MySQL 8.4) | دیتابیس. همهٔ اطلاعات اینجاست. |
-| **redis** | شمارندهٔ محدودیت درخواست‌ها (ضد حمله). اطلاعات مهم ندارد. |
-| **backup** | هر شب ساعت ۲ (وقت کابل) از دیتابیس بک‌اپ می‌گیرد و ۳۰ روز نگه می‌دارد. |
-| **caddy** (فقط VPS ساده) | گواهی SSL (قفل سبز https) را خودکار از Let's Encrypt می‌گیرد و تمدید می‌کند. |
+| **kabulcargo_web** (nginx) | صفحهٔ برنامه را به مرورگر می‌دهد و درخواست‌ها را به Django می‌فرستد. فایل اسناد را فقط بعد از اجازهٔ Django می‌دهد. |
+| **kabulcargo_backend** (Django + gunicorn) | همهٔ منطق: ورود، معاملات، گزارش‌ها، پنل Django در مسیر مخفی `ADMIN_URL`. |
+| **kabulcargo_db** (MySQL 8.4) | دیتابیس. همهٔ اطلاعات اینجاست. |
+| **kabulcargo_redis** | شمارندهٔ محدودیت درخواست‌ها (ضد حمله). اطلاعات مهم ندارد. |
+| **kabulcargo_backup** (فقط VPS ساده) | هر شب ساعت ۲ (وقت کابل) از دیتابیس بک‌اپ می‌گیرد و ۳۰ روز نگه می‌دارد. در Coolify این کار را Scheduled Task می‌کند. |
+| **kabulcargo_caddy** (فقط VPS ساده) | گواهی SSL (قفل سبز https) را خودکار از Let's Encrypt می‌گیرد و تمدید می‌کند. |
 
 ---
 
@@ -34,34 +39,23 @@
 
 ### دامنه و DNS
 
-1. یک زیردامنه انتخاب کنید، مثلاً `app.kabulcargo.com`.
+1. زیردامنه: `transit.kabulcargo.com`.
 2. در پنل DNS دامنهٔ `kabulcargo.com` یک رکورد بسازید:
 
    | نوع | نام | مقدار |
    | --- | --- | --- |
-   | `A` | `app` | IP سرور، مثلاً `203.0.113.10` |
+   | `A` | `transit` | IP سرور |
 
-3. ۵ تا ۳۰ دقیقه صبر کنید. آزمایش: `ping app.kabulcargo.com` باید IP سرور را نشان دهد.
+3. ۵ تا ۳۰ دقیقه صبر کنید. آزمایش: `nslookup transit.kabulcargo.com` باید IP سرور را نشان دهد.
 
 اگر از Cloudflare استفاده می‌کنید، برای اولین نصب ابر نارنجی را **خاموش** (DNS only) بگذارید تا
 گواهی SSL گرفته شود. بعداً اگر روشنش کردید، `TRUSTED_PROXY_COUNT` را یکی زیاد کنید (بخش ۵).
 
 ---
 
-## ۳. راه اول: Coolify (پیشنهادی اگر Coolify دارید)
+## ۳. راه اول: Coolify
 
-Coolify یک پنل ساده برای اجرای برنامه‌های Docker است؛ SSL و به‌روزرسانی را خودش انجام می‌دهد.
-
-1. در Coolify: **+ New → Resource** → مخزن Git پروژه را انتخاب کنید (Public یا Private با GitHub App).
-2. **Build Pack** را `Docker Compose` بگذارید و فایل را `docker-compose.yml` (پیش‌فرض) نگه دارید.
-3. در بخش **Environment Variables** همهٔ متغیرهای فایل `.env.production.example` را با مقدار
-   واقعی بنویسید (بخش ۵). `DOMAIN` و `LETSENCRYPT_EMAIL` در Coolify لازم نیست.
-4. در لیست سرویس‌ها روی **nginx** کلیک کنید و در **Domains** بنویسید:
-   `https://app.kabulcargo.com` — Coolify گواهی SSL را خودش می‌گیرد. (سرویس‌های دیگر دامنه ندارند.)
-5. **Deploy** را بزنید. اولین ساخت ۵ تا ۱۰ دقیقه طول می‌کشد.
-6. وقتی همهٔ سرویس‌ها سبز (healthy) شدند، به بخش ۶ (اولین اجرا) بروید.
-   دستورهای این راهنما را در Coolify از **Terminal** همان سرویس (`backend`) اجرا کنید؛ بخش
-   `docker compose exec backend` را ننویسید.
+راهنمای کامل (همهٔ کلیک‌ها، سرور مشترک با Donya): [`docs/DEPLOY_COOLIFY.md`](DEPLOY_COOLIFY.md).
 
 ---
 
@@ -102,9 +96,9 @@ alias kc='docker compose -f /opt/kabulcargo/docker-compose.yml -f /opt/kabulcarg
 
 ### SSL (Let's Encrypt)
 
-- **VPS ساده:** Caddy به محض اجرا برای `DOMAIN` گواهی می‌گیرد و هر ۶۰ روز خودکار تمدید می‌کند.
-  شرط: رکورد DNS درست باشد و پورت‌های ۸۰ و ۴۴۳ باز باشند. اگر گواهی گرفته نشد: `kc logs caddy`.
-- **Coolify:** خودش انجام می‌دهد (بخش ۳، قدم ۴).
+- **VPS ساده:** Caddy به محض اجرا برای `APP_DOMAIN` گواهی می‌گیرد و هر ۶۰ روز خودکار تمدید می‌کند.
+  شرط: رکورد DNS درست باشد و پورت‌های ۸۰ و ۴۴۳ باز باشند. اگر گواهی گرفته نشد: `kc logs kabulcargo_caddy`.
+- **Coolify:** خودش انجام می‌دهد (`docs/DEPLOY_COOLIFY.md`).
 - همهٔ صفحه‌ها فقط با `https://` باز می‌شوند؛ `http://` خودکار به `https://` می‌رود.
 
 ---
@@ -113,17 +107,17 @@ alias kc='docker compose -f /opt/kabulcargo/docker-compose.yml -f /opt/kabulcarg
 
 | متغیر | چیست | مثال |
 | --- | --- | --- |
-| `DOMAIN` | دامنه، بدون `https://` (فقط VPS ساده) | `app.kabulcargo.com` |
-| `ALLOWED_HOSTS` | همان دامنه — Django فقط به آن جواب می‌دهد | `app.kabulcargo.com` |
-| `CORS_ALLOWED_ORIGINS` | همان دامنه با `https://` | `https://app.kabulcargo.com` |
-| `CSRF_TRUSTED_ORIGINS` | همان دامنه با `https://` (برای ورود به `/admin/`) | `https://app.kabulcargo.com` |
+| `APP_DOMAIN` | دامنه، بدون `https://`. Django فقط به همین جواب می‌دهد (CORS و CSRF هم از همین ساخته می‌شوند) | `transit.kabulcargo.com` |
+| `ADMIN_URL` | مسیر مخفی پنل Django (فقط سوپر ادمین). نباید `admin/` باشد | `kc-panel-7f3a91c2/` |
 | `LETSENCRYPT_EMAIL` | ایمیل برای هشدارهای گواهی SSL | `it@kabulcargo.com` |
 | `SECRET_KEY` | کلید رمز Django، **۵۰+ حرف تصادفی** | (دستور پایین) |
 | `DB_PASSWORD` | رمز کاربر دیتابیس | (دستور پایین) |
 | `MYSQL_ROOT_PASSWORD` | رمز مدیر MySQL — متفاوت از بالا | (دستور پایین) |
 | `DB_NAME`, `DB_USER` | نام دیتابیس و کاربر آن | `kabulcargo` (پیش‌فرض) |
 | `TRUSTED_PROXY_COUNT` | تعداد پراکسی جلوی Django. Caddy/Coolify + nginx = **۲**؛ با Cloudflare = **۳** | `2` |
-| `GUNICORN_WORKERS` | تعداد پروسه‌های همزمان: حدود ۲ × هسته + ۱ | `3` |
+| `GUNICORN_WORKERS` | تعداد پروسه‌های همزمان (۳ در محدودهٔ ۷۶۸ MB حافظه) | `3` |
+| `LOGIN_FAILURE_RATE` | ورود ناموفق از یک IP (یک دفتر) در دقیقه | `20/m` |
+| `THROTTLE_ANON_RATE` / `THROTTLE_USER_RATE` | درخواست بی‌ورود از یک IP / درخواست هر کاربر در دقیقه | `60/minute` / `100/minute` |
 | `JWT_ACCESS_MINUTES` | ورود بعد از چند دقیقه بی‌کاری تازه می‌شود | `60` |
 | `JWT_REFRESH_DAYS` | بعد از چند روز دوباره رمز خواسته شود | `7` |
 | `BACKUP_HOUR` | ساعت بک‌اپ شبانه (وقت کابل، ۰ تا ۲۳) | `2` |
@@ -134,6 +128,7 @@ alias kc='docker compose -f /opt/kabulcargo/docker-compose.yml -f /opt/kabulcarg
 ```bash
 docker run --rm python:3.12-slim python -c "import secrets; print(secrets.token_urlsafe(64))"   # SECRET_KEY
 docker run --rm python:3.12-slim python -c "import secrets; print(secrets.token_urlsafe(32))"   # هر رمز دیتابیس
+docker run --rm python:3.12-slim python -c "import secrets; print('kc-panel-' + secrets.token_hex(6) + '/')"   # ADMIN_URL
 ```
 
 **مهم:**
@@ -151,13 +146,14 @@ docker run --rm python:3.12-slim python -c "import secrets; print(secrets.token_
 
 ```bash
 # ۱) سوپر ادمین اول — نام کاربری و رمز قوی را خودتان انتخاب می‌کنید
-kc exec backend python manage.py createsuperuser
+kc exec kabulcargo_backend python manage.py createsuperuser
 
-# ۲) سطرهای پیش‌فرض گزارش عاید (IAS 1)
-kc exec backend python manage.py seed_statement_lines
+# ۲) سطرهای پیش‌فرض گزارش عاید (IAS 1) و انواع اسناد (اگر از قبل باشند، دست نمی‌خورند)
+kc exec kabulcargo_backend python manage.py seed_statement_lines
+kc exec kabulcargo_backend python manage.py seed_document_types
 ```
 
-بعد در مرورگر `https://app.kabulcargo.com` را باز کنید، با سوپر ادمین وارد شوید و:
+بعد در مرورگر `https://transit.kabulcargo.com` را باز کنید، با سوپر ادمین وارد شوید و:
 
 1. **مدیریت → بندرها → بندر تازه:** هر شعبه را اضافه کنید (نام، کود کوتاه انگلیسی مثل `HRT`،
    شهر). کود بعد از ثبت عوض نمی‌شود. هر بندر خودکار ۱۷۲ تنظیم فیلد می‌گیرد.
@@ -178,8 +174,8 @@ kc exec backend python manage.py seed_statement_lines
 
 ### بک‌اپ
 - **خودکار:** هر شب ساعت ۲، فایل `kabulcargo-YYYY-MM-DD-HHMM.sql.gz`، ۳۰ روز نگه داشته می‌شود.
-- **دستی (مثلاً قبل از به‌روزرسانی):** `kc exec backend python manage.py backup_db`
-- **فهرست بک‌اپ‌ها:** `kc exec backend ls -lh /app/backups`
+- **دستی (مثلاً قبل از به‌روزرسانی):** `kc exec kabulcargo_backend python manage.py backup_db`
+- **فهرست بک‌اپ‌ها:** `kc exec kabulcargo_backend ls -lh /app/backups`
 - **بیرون از سرور (ضروری):** بک‌اپی که فقط در همان سرور است، با خراب شدن سرور از بین می‌رود.
   فایل `deploy/offsite-backup.sh` هر شب بک‌اپ دیتابیس **و** فایل‌های اسناد را به
   `/var/backups/kabulcargo` و (با تنظیم `rclone`) به یک فضای بیرونی (Backblaze B2، Google Drive،
@@ -193,7 +189,7 @@ kc exec backend python manage.py seed_statement_lines
   ```
 
   ماهی یک بار `/var/log/kabulcargo-offsite.log` را نگاه کنید: باید هر روز «off-server copy ok» باشد.
-- **آزمایش بازیابی (ماهی یک بار):** `kc exec backend python manage.py restore_db --drill`
+- **آزمایش بازیابی (ماهی یک بار):** `kc exec kabulcargo_backend python manage.py restore_db --drill`
   — یک بک‌اپ تازه می‌گیرد، آن را در یک دیتابیس جداگانه بار می‌کند، همهٔ جدول‌ها را با دیتابیس
   اصلی مقایسه می‌کند و بعد پاک می‌کند. دیتابیس اصلی دست نمی‌خورد. پیام آخر باید «تمرین بازیابی
   موفق» باشد.
@@ -203,10 +199,10 @@ kc exec backend python manage.py seed_statement_lines
 | چه | دستور |
 | --- | --- |
 | همهٔ سرویس‌ها (زنده) | `kc logs -f --tail 100` |
-| فقط Django (خطاها، ورودها، رویدادهای امنیتی) | `kc logs backend --tail 200` |
-| فقط رویدادهای امنیتی | `kc exec backend tail -n 100 /app/logs/security.log` |
-| بک‌اپ شبانه | `kc logs backup --tail 20` |
-| SSL | `kc logs caddy --tail 50` |
+| فقط Django (خطاها، ورودها، رویدادهای امنیتی) | `kc logs kabulcargo_backend --tail 200` |
+| فقط رویدادهای امنیتی | `kc exec kabulcargo_backend tail -n 100 /app/logs/security.log` |
+| بک‌اپ شبانه | `kc logs kabulcargo_backup --tail 20` |
+| SSL | `kc logs kabulcargo_caddy --tail 50` |
 
 لاگ‌ها خودکار چرخانده می‌شوند (هر سرویس حداکثر ۵ فایل × ۱۰ MB)؛ دیسک پر نمی‌شود.
 در `security.log` ورود ناموفق، قفل حساب، ساختن کاربر، تغییر نقش، خروجی Excel و بک‌اپ ثبت است.
@@ -214,14 +210,14 @@ kc exec backend python manage.py seed_statement_lines
 ### باز کردن حساب قفل‌شده
 بعد از ۵ رمز اشتباه، حساب ۱۵ دقیقه قفل می‌شود. سوپر ادمین فوراً باز می‌کند:
 **مدیریت → کاربران** → کنار نام کاربر نشان «قفل» → دکمهٔ **باز کردن قفل**.
-(اگر خود سوپر ادمین قفل شد: ۱۵ دقیقه صبر، یا `kc exec backend python manage.py axes_reset`.)
+(اگر خود سوپر ادمین قفل شد: ۱۵ دقیقه صبر، یا `kc exec kabulcargo_backend python manage.py axes_reset`.)
 
 ### فراموشی رمز
 سوپر ادمین در **مدیریت → کاربران → تغییر رمز** رمز تازه می‌گذارد. اگر رمز خود سوپر ادمین
-فراموش شد: `kc exec backend python manage.py changepassword <نام کاربری>`
+فراموش شد: `kc exec kabulcargo_backend python manage.py changepassword <نام کاربری>`
 
 ### وضعیت سلامت
-`https://app.kabulcargo.com/api/health/` باید `{"status": "ok", ...}` نشان دهد. این نشانی را
+`https://transit.kabulcargo.com/api/health/` باید `{"status": "ok", ...}` نشان دهد. این نشانی را
 می‌توانید به یک سرویس رایگان مثل UptimeRobot بدهید تا اگر سیستم خاموش شد به شما ایمیل بزند.
 
 ---
@@ -230,14 +226,13 @@ kc exec backend python manage.py seed_statement_lines
 
 ```bash
 cd /opt/kabulcargo
-kc exec backend python manage.py backup_db       # ۱) بک‌اپ قبل از هر چیز
+kc exec kabulcargo_backend python manage.py backup_db       # ۱) بک‌اپ قبل از هر چیز
 git tag before-$(date +%Y%m%d) && git pull       # ۲) نشانه‌گذاری نسخهٔ فعلی + گرفتن کد تازه
 kc up -d --build                                  # ۳) ساخت و اجرا (مایگریشن‌ها خودکار)
 kc ps                                             # ۴) همه healthy؟
 ```
 
-در Coolify: **Redeploy** (یا Auto Deploy با هر push). قبلش از Terminal سرویس backend
-`python manage.py backup_db` را بزنید.
+در Coolify: `docs/DEPLOY_COOLIFY.md` بخش «به‌روزرسانی».
 
 قطعی در هنگام به‌روزرسانی معمولاً کمتر از یک دقیقه است. بهتر است بیرون از ساعت کاری انجام شود.
 
@@ -263,23 +258,23 @@ kc up -d --build
 
 ```bash
 # ۱) فهرست بک‌اپ‌ها
-kc exec backend ls -lh /app/backups
+kc exec kabulcargo_backend ls -lh /app/backups
 
 # ۲) اگر بک‌اپ از بیرون سرور آمده، اول آن را به داخل بفرستید:
-kc cp /var/backups/kabulcargo/db/kabulcargo-2026-10-27-0200.sql.gz backend:/app/backups/
+kc cp /var/backups/kabulcargo/db/kabulcargo-2026-10-27-0200.sql.gz kabulcargo_backend:/app/backups/
 
 # ۳) بازیابی (نام دیتابیس را برای تأیید بنویسید)
-kc exec backend python manage.py restore_db /app/backups/kabulcargo-2026-10-27-0200.sql.gz --confirm kabulcargo
+kc exec kabulcargo_backend python manage.py restore_db /app/backups/kabulcargo-2026-10-27-0200.sql.gz --confirm kabulcargo
 
 # ۴) اگر کد تازه‌تر از بک‌اپ است
-kc exec backend python manage.py migrate
+kc exec kabulcargo_backend python manage.py migrate
 ```
 
 فایل‌های اسناد (عکس بارنامه و …) جدا از دیتابیس‌اند. اگر سرور کاملاً از بین رفت، آن‌ها را از کاپی
 بیرونی برگردانید:
 
 ```bash
-kc cp /var/backups/kabulcargo/media/. backend:/app/media/
+kc cp /var/backups/kabulcargo/media/. kabulcargo_backend:/app/media/
 ```
 
 ### انتقال به سرور تازه
