@@ -11,7 +11,7 @@ Options:  --skip-e2e        backend scripts + frontend static checks only
                             The fixture scripts reach that stack's database through the DB_*
                             environment variables (they override .env).
 
-1. The six backend verify scripts (each rolls back its own data).
+1. The backend verify scripts (each rolls back its own data).
 2. Frontend static checks: typecheck, lint, production build.
 3. Every E2E suite with its fixtures: setup → verify → cleanup (cleanup also runs after a
    failure). Django and Vite are started on their own ports (8010 / 5183 by default), so a
@@ -47,7 +47,7 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
 BACKEND_SCRIPTS = ['verify_field_config', 'verify_transaction', 'verify_finance', 'verify_api',
-                   'verify_statement', 'verify_security', 'verify_documents']
+                   'verify_statement', 'verify_security', 'verify_documents', 'verify_kabul_day']
 
 # name, fixture script, setup args, cleanup args, verify script, password env, extra env
 E2E_STAGES = [

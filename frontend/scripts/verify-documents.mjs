@@ -785,6 +785,14 @@ await step(25, 'Pashto and English: register and checklist are translated', asyn
     await mgr.evaluate((l) => localStorage.setItem('kc.lang', l), lang);
     await mgr.goto(`${BASE}/transactions/${txEmpty.id}`);
     await mgr.getByTestId('doc-checklist').waitFor();
+    // The type names arrive with their own request, after the panel itself: wait for them.
+    const typeName = lang === 'ps' ? 'T1 سند' : 'T1 transit document';
+    await mgr
+      .getByTestId('documents-panel')
+      .getByText(typeName)
+      .first()
+      .waitFor({ timeout: 10000 })
+      .catch(() => {});
     texts[lang] = await mgr.getByTestId('documents-panel').textContent();
   }
   await mgr.evaluate(() => localStorage.setItem('kc.lang', 'fa'));

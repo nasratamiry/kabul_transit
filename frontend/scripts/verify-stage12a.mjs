@@ -555,9 +555,18 @@ await step(
 // ============================ Super admin + 428 ============================
 await step(28, 'super_admin picker: branch first, cards disabled until then', async () => {
   await admin.goto(`${BASE}/transactions/new`);
-  const disabled = await admin.locator('[data-testid=trade-card-EXPORT]').isDisabled();
+  const card = admin.locator('[data-testid=trade-card-EXPORT]');
+  await card.waitFor();
+  const disabled = await card.isDisabled();
+  // The branch list arrives with its own request; the cards re-render after the choice.
+  await admin
+    .locator(`[data-testid=picker-branch] option[value="${B.id}"]`)
+    .waitFor({ state: 'attached' });
   await admin.selectOption('[data-testid=picker-branch]', String(B.id));
-  const enabled = await admin.locator('[data-testid=trade-card-EXPORT]').isEnabled();
+  const enabled = await admin
+    .waitForSelector('[data-testid=trade-card-EXPORT]:not([disabled])', { timeout: 10000 })
+    .then(() => true)
+    .catch(() => false);
   check(28, 'super_admin picker: branch first, cards disabled until then', disabled && enabled);
 });
 

@@ -5,6 +5,14 @@ Every model is tracked by django-simple-history, so creating and deleting test d
 audit rows behind — a test branch alone leaves 172 FieldConfig history rows. Call these
 AFTER deleting the objects: the delete itself writes one more «-» row per object.
 """
+import os
+import sys
+
+# Every E2E fixture imports this module before it writes anything. Test users with known
+# passwords must never be created in a production database.
+if os.environ.get('DJANGO_SETTINGS_MODULE', '').endswith('settings_production'):
+    sys.exit('E2E fixtures never run with production settings.')
+
 from accounts.models import Branch, User
 from config.models import DocumentRequirement, FieldConfig
 from finance.models import ExchangeRate, Hawala, OfficeExpense
