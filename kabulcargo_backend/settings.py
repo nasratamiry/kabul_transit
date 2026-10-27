@@ -167,9 +167,12 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle',
         'rest_framework.throttling.AnonRateThrottle',
     ],
+    # A branch office's staff usually share ONE public IP (NAT), so per-IP limits are sized for
+    # ~10 people at once: 'anon' covers login + token refresh of the whole office. The 'user'
+    # limit is per account, so colleagues never use up each other's.
     'DEFAULT_THROTTLE_RATES': {
-        'user': '100/minute',
-        'anon': '20/minute',
+        'user': config('THROTTLE_USER_RATE', default='100/minute'),
+        'anon': config('THROTTLE_ANON_RATE', default='60/minute'),
     },
     # DRF trusts X-Forwarded-For by default (NUM_PROXIES=None), which lets anyone
     # dodge the anon throttle by faking the header. Same rule as client_ip().
@@ -248,6 +251,10 @@ JAZZMIN_UI_TWEAKS = {
 # trusted, and only the hop our proxy added — see security.client_ip().
 TRUSTED_PROXY_COUNT = config('TRUSTED_PROXY_COUNT', default=0, cast=int)
 
+# Django admin path. Production uses a secret path (settings_production.py refuses "admin/"):
+# /admin/... in the browser are the React app's own super-admin pages.
+ADMIN_URL = config('ADMIN_URL', default='admin/').strip('/') + '/'
+
 # Production only (settings_production.py sets these unconditionally).
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
@@ -285,19 +292,24 @@ CONTENT_SECURITY_POLICY = {
     },
 }
 
-# Account lockout (django-axes): 5 failures → locked for 15 minutes, per
-# username and, separately, per IP. A super admin unlocks from the admin
-# (Axes → Access attempts → delete).
+# Account lockout (django-axes): 5 failures → that ACCOUNT is locked for 15 minutes, from any IP.
+# Not per IP: a branch office shares one public IP, and one person's typos must not lock out
+# the whole office. Guessing many usernames from one IP is stopped by LOGIN_FAILURE_RATE below,
+# and every account still locks after 5 tries. A super admin unlocks from the Users page.
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = 0.25  # hours = 15 minutes
-AXES_LOCKOUT_PARAMETERS = ['username', 'ip_address']
+AXES_LOCKOUT_PARAMETERS = ['username']
+# axes.W006 warns that its lockout ignores the IP. On purpose (office NAT, above): the per-IP
+# guard is LOGIN_FAILURE_RATE (django-ratelimit, api/views/auth.py; verify_security.py checks both).
+SILENCED_SYSTEM_CHECKS = ['axes.W006']
 AXES_RESET_ON_SUCCESS = True
 AXES_LOCKOUT_CALLABLE = 'api.views.auth.lockout_response'
 AXES_CLIENT_IP_CALLABLE = 'kabulcargo_backend.security.client_ip'
 
 # Login rate limit (django-ratelimit, failed attempts only — see api/views/auth.py).
 RATELIMIT_IP_META_KEY = 'kabulcargo_backend.security.client_ip'
-LOGIN_FAILURE_RATE = '5/m'
+# Per IP = per office: room for a few people's typos in the same minute.
+LOGIN_FAILURE_RATE = config('LOGIN_FAILURE_RATE', default='20/m')
 
 # Throttle and rate-limit counters. One process in development; production
 # needs a shared cache (settings_production.py).
@@ -307,7 +319,7 @@ CACHES = {
 
 # Backups (python manage.py backup_db)
 BACKUP_DIR = BASE_DIR / 'backups'
-BACKUP_KEEP_DAYS = 30
+BACKUP_KEEP_DAYS = config('BACKUP_KEEP_DAYS', default=30, cast=int)
 MYSQLDUMP_PATH = config('MYSQLDUMP_PATH', default='')
 
 

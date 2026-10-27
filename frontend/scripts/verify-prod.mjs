@@ -3,7 +3,8 @@
  * dev servers. Run by scripts/prod_local_test.ps1 after the first super admin exists:
  *   node scripts/verify-prod.mjs <screenshot-dir>
  * Env: KC_BASE_URL (default http://localhost:8080 = nginx of docker-compose.local.yml),
- *      KC_ADMIN_USER / KC_ADMIN_PASS (the first super admin), KC_BROWSER.
+ *      KC_ADMIN_USER / KC_ADMIN_PASS (the first super admin), KC_ADMIN_URL (the Django admin's
+ *      path, as in ADMIN_URL), KC_BROWSER.
  *
  * It does the first-run steps through the UI (log in, create the first branch), then checks:
  * built SPA + history fallback, cache headers, gzip, security headers (SPA and API), DEBUG off,
@@ -18,10 +19,11 @@ import { chromium } from 'playwright-core';
 const BASE = (process.env.KC_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 const SHOTS = process.argv[2] ?? 'prod-screenshots';
 const ADMIN = [process.env.KC_ADMIN_USER, process.env.KC_ADMIN_PASS];
+const ADMIN_PATH = `/${(process.env.KC_ADMIN_URL ?? '').replace(/^\/+|\/+$/g, '')}/`;
 const BROWSER =
   process.env.KC_BROWSER ?? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
-if (!ADMIN.every(Boolean)) {
-  console.error('Set KC_ADMIN_USER and KC_ADMIN_PASS (the first super admin)');
+if (!ADMIN.every(Boolean) || ADMIN_PATH === '//') {
+  console.error('Set KC_ADMIN_USER, KC_ADMIN_PASS (the first super admin) and KC_ADMIN_URL');
   process.exit(2);
 }
 fs.mkdirSync(SHOTS, { recursive: true });
@@ -200,15 +202,22 @@ await step(
 );
 
 await step(7, 'Admin panel and its static files (collectstatic → nginx /static/)', async () => {
-  const login = await fetch(`${BASE}/admin/login/`);
+  const login = await fetch(`${BASE}${ADMIN_PATH}login/`);
+  // /admin/... is the React app's: a direct load must get the app, not Django.
+  const spaAdmin = await fetch(`${BASE}/admin/field-settings`);
+  const spaHtml = await spaAdmin.text();
   const html = await login.text();
   const css = html.match(/\/static\/[^"]+\.css/)?.[0];
   const cssResponse = css ? await fetch(`${BASE}${css}`) : { status: 0 };
   check(
     7,
     'Admin panel and its static files (collectstatic → nginx /static/)',
-    login.status === 200 && html.includes('کابل کارگو') && cssResponse.status === 200,
-    `css=${css} ${cssResponse.status}`,
+    login.status === 200 &&
+      html.includes('کابل کارگو') &&
+      cssResponse.status === 200 &&
+      spaAdmin.status === 200 &&
+      spaHtml.includes('id="root"'),
+    `css=${css} ${cssResponse.status}, /admin/field-settings → ${spaAdmin.status}`,
   );
 });
 

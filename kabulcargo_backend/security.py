@@ -56,7 +56,7 @@ def log_event(event, request=None, level=logging.INFO, **fields):
 class KabulCSPMiddleware(CSPMiddleware):
     """
     Strict CSP from settings.CONTENT_SECURITY_POLICY everywhere, with one
-    deliberate exception for /admin/: Jazzmin hard-codes two inline scripts
+    deliberate exception for the admin (settings.ADMIN_URL): Jazzmin hard-codes two inline scripts
     (theme switcher, list-filter setup) and loads Google Fonts, and those can't
     be given a nonce without forking Jazzmin's base template. The admin is
     super-admin only and Django escapes all output, so allowing inline scripts
@@ -70,6 +70,6 @@ class KabulCSPMiddleware(CSPMiddleware):
 
     def get_policy_parts(self, request, response, report_only=False):
         parts = super().get_policy_parts(request, response, report_only)
-        if not report_only and request.path_info.startswith('/admin/'):
+        if not report_only and request.path_info.startswith('/' + settings.ADMIN_URL):
             parts.update = {**(parts.update or {}), **self.ADMIN_EXTRA}
         return parts

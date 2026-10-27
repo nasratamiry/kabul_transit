@@ -47,6 +47,8 @@ from operations.models import Document, Transaction  # noqa: E402
 from partners.models import Trader  # noqa: E402
 
 PASSWORD = 'Kabul-Secure-2026!'
+LOGIN_LIMIT = int(settings.LOGIN_FAILURE_RATE.split('/')[0])            # failed logins per IP per minute
+ANON_LIMIT = int(settings.REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']['anon'].split('/')[0])
 LOG_FILE = Path(settings.LOG_DIR) / 'security.log'
 BACKUP_DIR = Path(settings.BACKUP_DIR)
 failures = []
@@ -109,7 +111,7 @@ def log_since(position):
 def run_production(code, **env):
     """Run python code with production settings in a fresh process; returns (returncode, stdout, stderr)."""
     full_env = {**os.environ, 'DJANGO_SETTINGS_MODULE': 'kabulcargo_backend.settings_production',
-                'PYTHONIOENCODING': 'utf-8', **env}
+                'PYTHONIOENCODING': 'utf-8', 'ADMIN_URL': 'kc-test-panel/', **env}
     prelude = f'import sys; sys.path.insert(0, {str(ROOT)!r}); import django; django.setup()\n'
     done = subprocess.run([sys.executable, '-c', prelude + code], env=full_env, capture_output=True,
                           text=True, encoding='utf-8', cwd=ROOT, timeout=120)
@@ -141,13 +143,33 @@ try:
         txn = Transaction.objects.create(branch=branch, trade_type='EXPORT', serial_number='ZZ-SEC-1')
 
         print('الف) محدودیت تعداد درخواست (Rate limiting)')
-        fresh_rate_window('10.7.0.1')
-        statuses = [login('10.7.0.1', f'zz_nobody_{i}', 'wrong')[1] for i in range(6)]
-        sixth = statuses[-1]
-        check('۶ تلاش ناموفق از یک IP → ششمی ۴۲۹ (TOO_MANY_LOGIN_ATTEMPTS)',
-              sixth.status_code == 429 and code_of(sixth) == 'TOO_MANY_LOGIN_ATTEMPTS'
-              and 'Retry-After' in sixth and 'ثانیه' in sixth.data['detail'],
+        fresh_rate_window('10.7.0.1', needed_seconds=30)
+        statuses = [login('10.7.0.1', f'zz_nobody_{i}', 'wrong')[1] for i in range(LOGIN_LIMIT + 1)]
+        last = statuses[-1]
+        check(f'{LOGIN_LIMIT + 1} تلاش ناموفق از یک IP → آخری ۴۲۹ (TOO_MANY_LOGIN_ATTEMPTS)',
+              all(r.status_code == 401 for r in statuses[:-1])
+              and last.status_code == 429 and code_of(last) == 'TOO_MANY_LOGIN_ATTEMPTS'
+              and 'Retry-After' in last and 'ثانیه' in last.data['detail'],
               f'statuses={[r.status_code for r in statuses]}')
+        cache.clear()
+
+        # A branch office: ~10 people behind ONE public IP (NAT), all logging in within the same
+        # minute. Everybody mistypes once, one person five times in all: only that one account is
+        # locked, the rest of the office logs in.
+        office_ip = '10.7.5.1'
+        office = [f'zz_sec_office{i}' for i in range(10)]
+        for name in office:
+            User.objects.create_user(name, password=PASSWORD, role='branch_manager', branch=branch)
+        fresh_rate_window(office_ip, needed_seconds=30)
+        for name in office:
+            login(office_ip, name, 'wrong')
+        for _ in range(4):
+            login(office_ip, office[0], 'wrong')
+        results = {name: login(office_ip, name)[1].status_code for name in office}
+        check('دفتر با یک IP مشترک (NAT، ۱۰ نفر): غلطی‌های عادی کسی را قفل نمی‌کند؛ فقط حساب ۵ بار غلط قفل است',
+              results[office[0]] == 423 and all(code == 200 for name, code in results.items() if name != office[0]),
+              f'{sorted(set(results.values()))} locked={[n for n, c in results.items() if c != 200]}')
+        cache.clear()
 
         for _ in range(3):
             login('10.7.0.2', 'zz_sec_u2', 'wrong')
@@ -166,12 +188,12 @@ try:
               f'200s={codes.count(200)}, first 429 at #{codes.index(429) + 1 if 429 in codes else None}')
 
         anon = [api('10.7.0.4').post('/api/auth/refresh/', {'refresh': 'x'}, format='json').status_code
-                for _ in range(21)]
+                for _ in range(ANON_LIMIT + 1)]
         spoofed = api('10.7.0.4').post('/api/auth/refresh/', {'refresh': 'x'}, format='json',
                                        HTTP_X_FORWARDED_FOR='203.0.113.9')
-        check('بی‌نام: ۲۰ در دقیقه؛ X-Forwarded-For جعلی محدودیت را دور نمی‌زند',
-              anon[:20].count(429) == 0 and anon[20] == 429 and spoofed.status_code == 429,
-              f'21st={anon[20]}, spoofed={spoofed.status_code}')
+        check(f'بی‌نام: {ANON_LIMIT} در دقیقه؛ X-Forwarded-For جعلی محدودیت را دور نمی‌زند',
+              anon[:ANON_LIMIT].count(429) == 0 and anon[ANON_LIMIT] == 429 and spoofed.status_code == 429,
+              f'last={anon[ANON_LIMIT]}, spoofed={spoofed.status_code}')
         cache.clear()
 
         print('ب) قفل حساب (django-axes)')
@@ -194,6 +216,17 @@ try:
               page.status_code == 200 and unlock.status_code == 302 and after_unlock.status_code == 200,
               f'admin page={page.status_code}, delete={unlock.status_code}, login={after_unlock.status_code}')
         cache.clear()
+
+        staff_mgr = Client(HTTP_HOST='127.0.0.1')
+        manager.is_staff = True
+        manager.save(update_fields=['is_staff'])
+        staff_mgr.force_login(manager)
+        refused = staff_mgr.get('/admin/')
+        check('پنل Django فقط برای سوپر ادمین: مدیر بندر حتی با «staff» راه ندارد',
+              browser.get('/admin/').status_code == 200 and refused.status_code == 302
+              and '/login/' in refused.headers.get('Location', ''), f'manager → {refused.status_code}')
+        manager.is_staff = False
+        manager.save(update_fields=['is_staff'])
 
         print('ج) هدرهای امنیتی')
         probe = (
@@ -296,6 +329,14 @@ try:
               rc_flag != 0 and 'KC_LOCAL_HTTP_TEST' in err_flag and rc_local == 0
               and out_local.strip().splitlines()[-1] == 'False False',
               f'real={rc_flag}, local={out_local.strip()[-20:]}')
+        rc_admin, _, err_admin = run_production('', ALLOWED_HOSTS='kabulcargo.example', ADMIN_URL='admin/',
+                                                CORS_ALLOWED_ORIGINS='https://app.kabulcargo.example')
+        rc_path, out_path, _ = run_production(
+            'from django.urls import reverse; print(reverse("admin:index"))', ALLOWED_HOSTS='kabulcargo.example',
+            ADMIN_URL='/kc-panel-x1/', CORS_ALLOWED_ORIGINS='https://app.kabulcargo.example')
+        check('production: ADMIN_URL=admin/ رد می‌شود (مسیر صفحه‌های React)؛ مسیر مخفی از env خوانده می‌شود',
+              rc_admin != 0 and 'ADMIN_URL' in err_admin and rc_path == 0
+              and out_path.strip().splitlines()[-1] == '/kc-panel-x1/', f'admin/={rc_admin}, path={out_path.strip()[-20:]}')
         check('ALLOWED_HOSTS و CORS از env خوانده می‌شوند',
               prod.get('hosts') == ['127.0.0.1', 'kabulcargo.example']
               and prod.get('cors') == ['https://app.kabulcargo.example'],

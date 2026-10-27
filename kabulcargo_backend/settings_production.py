@@ -4,7 +4,7 @@ Production settings. Use with:
 
 Everything below is mandatory in production and does not depend on .env's
 DEBUG value. Required in the environment / .env: SECRET_KEY (50+ chars),
-ALLOWED_HOSTS, CORS_ALLOWED_ORIGINS, DB_*. Optional: TRUSTED_PROXY_COUNT
+ALLOWED_HOSTS, CORS_ALLOWED_ORIGINS, ADMIN_URL (not admin/), DB_*. Optional: TRUSTED_PROXY_COUNT
 (1 behind nginx; 2 in docker-compose: TLS proxy → nginx), CSRF_TRUSTED_ORIGINS, REDIS_URL
 (required by docker-compose.yml). KC_LOCAL_HTTP_TEST is for a local test of the Docker stack
 only and is refused for any real host name.
@@ -13,9 +13,16 @@ from decouple import Csv, config
 from django.core.exceptions import ImproperlyConfigured
 
 from .settings import *  # noqa: F401,F403
-from .settings import LOGGING, REST_FRAMEWORK, SECRET_KEY
+from .settings import ADMIN_URL, LOGGING, REST_FRAMEWORK, SECRET_KEY
 
 DEBUG = False
+
+# The Django admin must live at a secret path of its own: /admin/... belongs to the React app
+# (nginx sends ADMIN_URL to Django and everything else to the app), and the other prefixes are
+# the API's and the files'.
+if ADMIN_URL.split('/')[0] in ('admin', 'api', 'static', 'assets', 'media', 'protected-media', ''):
+    raise ImproperlyConfigured('ADMIN_URL must be a path of its own in production, e.g. "kc-panel-7f3a/" '
+                               '(not admin/, api/, static/, assets/ or media/).')
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=Csv())
 if not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS:
     raise ImproperlyConfigured('ALLOWED_HOSTS must list the real domain names in production (no "*").')

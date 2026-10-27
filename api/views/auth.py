@@ -51,8 +51,9 @@ class KabulTokenObtainPairSerializer(TokenObtainPairSerializer):
 class LoginView(TokenObtainPairView):
     """
     JWT login with two brute-force guards:
-    - more than 5 failed logins per minute from one IP → 429 TOO_MANY_LOGIN_ATTEMPTS;
-    - 5 failures for one username (or one IP) → axes locks it for 15 min → 423 ACCOUNT_LOCKED.
+    - more than LOGIN_FAILURE_RATE failed logins per minute from one IP (one office) → 429
+      TOO_MANY_LOGIN_ATTEMPTS;
+    - 5 failures for one username → axes locks that account for 15 min → 423 ACCOUNT_LOCKED.
     simplejwt never sends user_logged_in, so it is sent here; that is what lets
     axes reset on success, updates last_login, and writes the security log.
     """
