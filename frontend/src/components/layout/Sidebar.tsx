@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  BadgeDollarSign,
   Building2,
   ClipboardCheck,
   Coins,
@@ -14,6 +15,7 @@ import {
   Users,
   Wallet,
   Handshake,
+  PiggyBank,
   Truck,
   X,
 } from 'lucide-react';
@@ -41,6 +43,7 @@ const MAIN: NavItem[] = [
 const FINANCE: NavItem[] = [
   { label: 'nav.hawala', icon: Send, to: '/finance/hawala' },
   { label: 'nav.office_expenses', icon: Wallet, to: '/finance/office-expenses' },
+  { label: 'nav.office_income', icon: PiggyBank, to: '/finance/office-income' },
 ];
 
 // Company-wide data: both roles read and edit it.
@@ -53,6 +56,7 @@ const ADMIN: NavItem[] = [
   { label: 'nav.branches', icon: Building2, to: '/admin/branches' },
   { label: 'nav.users', icon: Users, to: '/admin/users' },
   { label: 'nav.exchange_rates', icon: Coins, to: '/admin/exchange-rates' },
+  { label: 'nav.money_settings', icon: BadgeDollarSign, to: '/admin/money-settings' },
   { label: 'nav.statement_lines', icon: ListOrdered, to: '/admin/statement-lines' },
   { label: 'nav.document_types', icon: FileStack, to: '/admin/document-types' },
   { label: 'nav.document_requirements', icon: ClipboardCheck, to: '/admin/document-requirements' },

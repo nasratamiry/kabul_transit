@@ -14,7 +14,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
-import { useBlocker, useMatch, useNavigate, useSearchParams } from 'react-router';
+import { Link, useBlocker, useMatch, useNavigate, useSearchParams } from 'react-router';
 
 import { HistoryModal } from '@/components/finance/shared';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -49,7 +49,8 @@ const byOrder = (a: FieldConfigRow, b: FieldConfigRow): number =>
  * «مدیریت → تنظیم فیلدها»: per branch × trade type, which transaction fields the form shows,
  * which are required, and their order within each section. Changes are staged here and saved
  * together (PATCH /field-configs/bulk/); the preview shows the branch manager's form with the
- * staged settings. Locked fields (serial, date, payment, currency, rate) stay required.
+ * staged settings. Locked fields (serial, date, currency, rate) stay required. Revenue and
+ * expense fields are managed on «عواید و مصارف» (one place); here they only show in the preview.
  */
 export function FieldSettings(): JSX.Element {
   const { t } = useTranslation();
@@ -80,7 +81,33 @@ export function FieldSettings(): JSX.Element {
     queryKey: [...KEY, scope],
     queryFn: () => api.get<FieldConfigRow[]>('/field-configs/', { params: scope }),
     enabled: branch !== null,
+    select: (data) => data.filter((r) => r.money_type === null),
   });
+  // The saved revenue / expense rows of this form, for the preview only: the same query as
+  // `rows` (one request); each money row carries its type's kind and names.
+  const allRows = useQuery({
+    queryKey: [...KEY, scope],
+    queryFn: () => api.get<FieldConfigRow[]>('/field-configs/', { params: scope }),
+    enabled: branch !== null,
+  });
+  const moneyFields = useMemo(
+    (): FormConfig['form_fields'] =>
+      (allRows.data ?? []).flatMap((r) => {
+        const x = r.money;
+        if (!x || !x.is_active || r.visibility === 'HIDDEN') return [];
+        return [
+          {
+            field_name: x.source,
+            label_fa: x.names.fa,
+            visibility: r.visibility as 'REQUIRED' | 'OPTIONAL',
+            required: r.visibility === 'REQUIRED',
+            sort_order: x.sort_order,
+            money: { code: x.code, kind: x.kind, section: x.section, names: x.names },
+          },
+        ];
+      }),
+    [allRows.data],
+  );
   const usage = useQuery({
     queryKey: [...KEY, 'usage', scope],
     queryFn: () => api.get<Record<string, number>>('/field-configs/usage/', { params: scope }),
@@ -258,15 +285,19 @@ export function FieldSettings(): JSX.Element {
           branch,
           trade_type: tradeType,
           trade_type_label: typeLabel,
-          form_fields: current
-            .filter((r) => r.visibility !== 'HIDDEN')
-            .map((r) => ({
-              field_name: r.field_name,
-              label_fa: r.field_label_fa,
-              visibility: r.visibility as 'REQUIRED' | 'OPTIONAL',
-              required: r.visibility === 'REQUIRED',
-              sort_order: r.sort_order,
-            })),
+          form_fields: [
+            ...current
+              .filter((r) => r.visibility !== 'HIDDEN')
+              .map((r) => ({
+                field_name: r.field_name,
+                label_fa: r.field_label_fa,
+                visibility: r.visibility as 'REQUIRED' | 'OPTIONAL',
+                required: r.visibility === 'REQUIRED',
+                sort_order: r.sort_order,
+                money: null,
+              })),
+            ...moneyFields,
+          ],
         }
       : null;
 
@@ -354,6 +385,19 @@ export function FieldSettings(): JSX.Element {
           ))}
         </div>
       </div>
+
+      <p
+        className="mb-4 rounded-lg border border-brand/30 bg-brand-light/50 px-4 py-3 text-sm dark:border-emerald-800 dark:bg-brand/20"
+        data-testid="fs-money-link"
+      >
+        {t('field_settings.money_note')}{' '}
+        <Link
+          to="/admin/money-settings"
+          className="font-semibold text-brand underline underline-offset-2 dark:text-emerald-300"
+        >
+          {t('nav.money_settings')}
+        </Link>
+      </p>
 
       {!rows.data ? (
         <div className="flex justify-center p-10">

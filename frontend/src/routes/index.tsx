@@ -6,12 +6,14 @@ import { DocumentRequirements } from '@/pages/admin/DocumentRequirements';
 import { DocumentTypes } from '@/pages/admin/DocumentTypes';
 import { ExchangeRates } from '@/pages/admin/ExchangeRates';
 import { FieldSettings } from '@/pages/admin/FieldSettings';
+import { MoneySettings } from '@/pages/admin/MoneySettings';
 import { StatementLines } from '@/pages/admin/StatementLines';
 import { Users } from '@/pages/admin/Users';
 import { Dashboard } from '@/pages/Dashboard';
 import { DocumentsRegister } from '@/pages/documents/DocumentsRegister';
 import { HawalaPage } from '@/pages/finance/HawalaPage';
 import { OfficeExpensesPage } from '@/pages/finance/OfficeExpensesPage';
+import { OfficeIncomePage } from '@/pages/finance/OfficeIncomePage';
 import { Login } from '@/pages/Login';
 import { Traders } from '@/pages/partners/Traders';
 import { TransportCompanies } from '@/pages/partners/TransportCompanies';
@@ -109,6 +111,16 @@ export const router = createBrowserRouter([
               { path: ':id/history', handle: crumb('finance.history') },
             ],
           },
+          {
+            path: 'office-income',
+            element: <OfficeIncomePage />,
+            handle: crumb('nav.office_income'),
+            children: [
+              { path: 'new', handle: crumb('common.add') },
+              { path: ':id/edit', handle: crumb('common.edit') },
+              { path: ':id/history', handle: crumb('finance.history') },
+            ],
+          },
         ],
       },
       {
@@ -182,6 +194,12 @@ export const router = createBrowserRouter([
             path: 'document-requirements',
             element: <DocumentRequirements />,
             handle: crumb('nav.document_requirements'),
+          },
+          {
+            path: 'money-settings',
+            element: <MoneySettings />,
+            handle: crumb('nav.money_settings'),
+            children: [{ path: ':id/history', handle: crumb('money_settings.history') }],
           },
           {
             path: 'field-settings',

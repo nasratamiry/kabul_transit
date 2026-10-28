@@ -29,37 +29,27 @@ import type { StatementLine, StatementLineHistory, StatementSection } from '@/ty
 
 const KEY = ['statement-lines'] as const;
 const BASE = '/admin/statement-lines';
-const SECTIONS: StatementSection[] = ['REVENUE', 'COGS', 'OPEX', 'OTHER'];
-const REVENUE_SOURCE = 'customer_payment';
+const SECTIONS: StatementSection[] = ['REVENUE', 'COGS', 'OPEX', 'OTHER', 'OTHER_INCOME'];
 
-const schema = z
-  .object({
-    section: z.enum(['REVENUE', 'COGS', 'OPEX', 'OTHER']),
-    code: z
-      .string()
-      .trim()
-      .min(1, 'common.required')
-      .max(32)
-      .regex(/^[A-Z][A-Z0-9_]*$/, 'statement_lines.code_invalid'),
-    label_fa: z.string().trim().min(1, 'common.required').max(120),
-    label_en: z.string().trim().max(120),
-    source_field: z.string().min(1, 'common.required'),
-    sort_order: z
-      .string()
-      .transform(normalizeNumber)
-      .refine((v) => /^\d{1,5}$/.test(v) && Number(v) <= 32767, 'statement_lines.sort_invalid'),
-    is_active: z.boolean(),
-  })
-  // Same rule as StatementLine.clean(): customer_payment is the only revenue, and only revenue.
-  .superRefine((v, ctx) => {
-    if (v.section === 'REVENUE' && v.source_field !== REVENUE_SOURCE) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['source_field'],
-        message: 'statement_lines.revenue_rule',
-      });
-    }
-  });
+const schema = z.object({
+  section: z.enum(['REVENUE', 'COGS', 'OPEX', 'OTHER', 'OTHER_INCOME']),
+  code: z
+    .string()
+    .trim()
+    .min(1, 'common.required')
+    .max(32)
+    .regex(/^[A-Z][A-Z0-9_]*$/, 'statement_lines.code_invalid'),
+  label_fa: z.string().trim().min(1, 'common.required').max(120),
+  label_en: z.string().trim().max(120),
+  source_field: z.string().min(1, 'common.required'),
+  sort_order: z
+    .string()
+    .transform(normalizeNumber)
+    .refine((v) => /^\d{1,5}$/.test(v) && Number(v) <= 32767, 'statement_lines.sort_invalid'),
+  is_active: z.boolean(),
+});
+// Which source fits which section (revenue types, office income, expenses) is checked by the
+// server's StatementLine.clean(): the kinds are set on «عواید و مصارف», so its message shows here.
 
 type FormInput = z.input<typeof schema>;
 type FormValues = z.output<typeof schema>;

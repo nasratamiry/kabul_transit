@@ -20,12 +20,12 @@ import { cn } from '@/lib/cn';
 import { currentShamsiMonth, toGregorian, toShamsiKey } from '@/lib/date';
 import { toDariDigits, useDigitLocale } from '@/lib/digits';
 import { typeName, useDocumentTypes } from '@/lib/documents';
-import { useBranches } from '@/lib/finance';
+import { useBranches, useMoneyTypes } from '@/lib/finance';
 import { toastError, useDebounced } from '@/lib/hooks';
 import { formatMoney } from '@/lib/money';
 import { useTodayUsdRate } from '@/lib/rates';
 import { downloadFile } from '@/lib/reports';
-import { TRADE_TYPES, TX_KEY } from '@/lib/transactionSections';
+import { TRADE_TYPES, TX_KEY, isLineField, lineCode, moneyName } from '@/lib/transactionSections';
 import { useAuth } from '@/stores/auth';
 import type { Paginated, Transaction } from '@/types/api';
 
@@ -65,6 +65,17 @@ export function TransactionsList(): JSX.Element {
   const dateTo = get('date_to') || month.to;
   const page = Number(get('page')) || 1;
   const highlight = Number(get('highlight')) || null;
+  // Drill-down chip: an added revenue / expense type ('@money:<code>') is named from its type.
+  const { types: moneyTypes } = useMoneyTypes(isLineField(get('nonzero')));
+  function nonzeroLabel(field: string): string {
+    if (isLineField(field)) {
+      const type = moneyTypes.find((x) => x.code === lineCode(field));
+      return type
+        ? moneyName({ fa: type.name_fa, ps: type.name_ps, en: type.name_en }, i18n.language)
+        : field;
+    }
+    return i18n.exists(`form.${field}`) ? t(`form.${field}`) : field;
+  }
 
   // The serial box is typed into, so it is debounced before it reaches the URL.
   const [searchText, setSearchText] = useState(get('search'));
@@ -450,11 +461,7 @@ export function TransactionsList(): JSX.Element {
       {get('nonzero') && (
         <p className="mb-3 flex flex-wrap items-center gap-2 text-sm" data-testid="nonzero-chip">
           <span className="rounded-full bg-brand-light px-3 py-1 text-brand dark:bg-brand/30 dark:text-emerald-200">
-            {t('reports.only_with_field', {
-              field: i18n.exists(`form.${get('nonzero')}`)
-                ? t(`form.${get('nonzero')}`)
-                : get('nonzero'),
-            })}
+            {t('reports.only_with_field', { field: nonzeroLabel(get('nonzero')) })}
           </span>
           <button
             type="button"

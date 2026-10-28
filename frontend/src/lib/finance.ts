@@ -4,7 +4,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 
 import { useAuth } from '@/stores/auth';
-import type { Branch, OfficeExpenseCategory, Paginated } from '@/types/api';
+import type {
+  Branch,
+  MoneyFieldType,
+  OfficeExpenseCategory,
+  OfficeIncomeCategory,
+  Paginated,
+} from '@/types/api';
 
 import { useApi } from './api';
 import { currentShamsiMonth, toShamsiKey } from './date';
@@ -15,6 +21,33 @@ import { formatMoney, type Currency } from './money';
 export const HAWALA_KEY = ['hawala'] as const;
 /** Also the prefix of the dashboard tile's query, so saving an expense refreshes it. */
 export const OFFICE_KEY = ['office-expenses'] as const;
+
+/** Also the prefix of the dashboard's office-income figures' refresh. */
+export const OFFICE_INCOME_KEY = ['office-incomes'] as const;
+export const INCOME_CATEGORIES_KEY = ['office-income-categories'] as const;
+export const MONEY_TYPES_KEY = ['money-types'] as const;
+
+/** Office-income categories (admin-managed), in their order; both roles read them. */
+export function useIncomeCategories(): { categories: OfficeIncomeCategory[]; isPending: boolean } {
+  const api = useApi();
+  const list = useQuery({
+    queryKey: [...INCOME_CATEGORIES_KEY],
+    queryFn: () => api.get<OfficeIncomeCategory[]>('/office-income-categories/'),
+    staleTime: 5 * 60_000,
+  });
+  return { categories: list.data ?? [], isPending: list.isPending };
+}
+
+/** Every revenue / expense type (built-in and added), in form order. */
+export function useMoneyTypes(enabled = true): { types: MoneyFieldType[]; isPending: boolean } {
+  const api = useApi();
+  const list = useQuery({
+    queryKey: [...MONEY_TYPES_KEY],
+    queryFn: () => api.get<MoneyFieldType[]>('/money-types/'),
+    enabled,
+  });
+  return { types: list.data ?? [], isPending: list.isPending };
+}
 
 /** Model order (OfficeExpense.Category); salary is reported on its own income-statement line. */
 export const CATEGORIES: OfficeExpenseCategory[] = [

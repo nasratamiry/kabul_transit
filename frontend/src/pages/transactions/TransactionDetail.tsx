@@ -18,22 +18,13 @@ import { toGregorian, todayShamsi } from '@/lib/date';
 import { isRtlLang, isolateLtr, toDariDigits, useDigitLocale } from '@/lib/digits';
 import { useList } from '@/lib/hooks';
 import { formatMoney, formatRate, type Currency } from '@/lib/money';
-import { EXPENSE_FIELDS, FIELD_TYPES, SECTIONS, TX_KEY } from '@/lib/transactionSections';
-import type { Branch, FormConfig, HistoryEntry, Transaction } from '@/types/api';
+import { FIELD_TYPES, SECTIONS, TX_KEY, moneyName } from '@/lib/transactionSections';
+import type { Branch, FormConfig, HistoryEntry, MoneyItem, Transaction } from '@/types/api';
 
 import { TRADE_TONE } from './tradeTone';
 
-/** Fields shown in the money table instead of the read-only sections. */
-const MONEY_TABLE = new Set(['customer_payment', 'currency', 'exchange_rate', ...EXPENSE_FIELDS]);
-
-/** Amount in AFN and USD, on the same rules as the row summary (USD: the record's date rate). */
-function convert(amount: number, tx: Transaction): { afn: number; usd: number | null } {
-  const rateToAfn = tx.currency === 'AFN' ? 1 : Number(tx.exchange_rate);
-  const afn = amount * rateToAfn;
-  if (tx.currency === 'USD') return { afn, usd: amount };
-  const perDollar = tx.row_summary.fee_per_dollar_afn;
-  return { afn, usd: perDollar ? afn / Number(perDollar) : null };
-}
+/** Fields shown in the money table (with every amount) instead of the read-only sections. */
+const MONEY_TABLE = new Set(['currency', 'exchange_rate']);
 
 /** /transactions/:id — read-only view, documents, history, print. */
 export function TransactionDetail(): JSX.Element {
@@ -102,12 +93,12 @@ export function TransactionDetail(): JSX.Element {
   const visible = new Set(config.data?.form_fields.map((f) => f.field_name) ?? []);
   const branchName = branches.data?.find((b) => b.id === r.branch)?.name ?? '';
   const profit = Number(r.row_summary.profit_or_loss_afn);
-  // Only the expenses this record actually has; the totals below cover them all anyway.
-  const expenseRows = EXPENSE_FIELDS.filter((f) => Number(r[f] ?? 0) !== 0);
+  // Every amount the record has (customer_payment always), split by kind: revenue / expense.
+  const revenueItems = r.money_items.filter((i) => i.kind === 'REVENUE');
+  const expenseItems = r.money_items.filter((i) => i.kind === 'EXPENSE');
   // An AFN record needs no «own currency» column: it would repeat the AFN one.
   const foreign = currency !== 'AFN';
-  const ownTotal = expenseRows.reduce((sum, f) => sum + Number(r[f] ?? 0), 0);
-  const payment = convert(Number(r.customer_payment), r);
+  const own = (items: MoneyItem[]): number => items.reduce((sum, i) => sum + Number(i.amount), 0);
 
   function show(field: string): string {
     const v = r[field];
@@ -240,35 +231,44 @@ export function TransactionDetail(): JSX.Element {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+              {revenueItems.map((i) => (
+                <MoneyRow
+                  key={i.code}
+                  label={moneyName(i.names, lang)}
+                  note={t('detail.revenue')}
+                  own={foreign ? money(i.amount, currency) : undefined}
+                  afn={money(i.amount_afn, 'AFN')}
+                  usd={money(i.amount_usd, 'USD')}
+                  testId={`money-${i.source}`}
+                />
+              ))}
               <MoneyRow
-                label={t('form.customer_payment')}
-                note={t('detail.revenue')}
-                own={foreign ? money(r.customer_payment, currency) : undefined}
-                afn={money(payment.afn, 'AFN')}
-                usd={money(payment.usd, 'USD')}
+                label={t('summary.revenue')}
+                own={foreign ? money(own(revenueItems), currency) : undefined}
+                afn={money(r.row_summary.total_revenue_afn, 'AFN')}
+                usd={money(r.row_summary.total_revenue_usd, 'USD')}
                 strong
+                testId="money-total-revenue"
               />
-              {expenseRows.map((f) => {
-                const c = convert(Number(r[f] ?? 0), r);
-                return (
-                  <MoneyRow
-                    key={f}
-                    label={t(`form.${f}`)}
-                    own={foreign ? money(String(r[f] ?? 0), currency) : undefined}
-                    afn={money(c.afn, 'AFN')}
-                    usd={money(c.usd, 'USD')}
-                    testId={`money-${f}`}
-                  />
-                );
-              })}
+              {expenseItems.map((i) => (
+                <MoneyRow
+                  key={i.code}
+                  label={moneyName(i.names, lang)}
+                  own={foreign ? money(i.amount, currency) : undefined}
+                  afn={money(i.amount_afn, 'AFN')}
+                  usd={money(i.amount_usd, 'USD')}
+                  testId={`money-${i.source}`}
+                />
+              ))}
             </tbody>
             <tfoot className="border-t-2 border-gray-200 dark:border-gray-600">
               <MoneyRow
                 label={t('summary.expenses')}
-                own={foreign ? money(ownTotal, currency) : undefined}
+                own={foreign ? money(own(expenseItems), currency) : undefined}
                 afn={money(r.row_summary.total_expense_afn, 'AFN')}
                 usd={money(r.row_summary.total_expense_usd, 'USD')}
                 strong
+                testId="money-total-expenses"
               />
               <tr
                 className={cn(

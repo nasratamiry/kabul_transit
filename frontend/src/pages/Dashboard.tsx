@@ -144,7 +144,10 @@ export function Dashboard(): JSX.Element {
             </span>
           )}
         </h2>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="kpis">
+        <div
+          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5"
+          data-testid="kpis"
+        >
           <Kpi
             label={t('dashboard.kpi_count')}
             testId="kpi-count"
@@ -166,6 +169,13 @@ export function Dashboard(): JSX.Element {
             s={s}
             field="expenses"
             invert
+          />
+          {/* «عواید دفتر این ماه»: office income, the statement's «سایر عواید» (same service). */}
+          <MoneyKpi
+            label={t('dashboard.kpi_office_income')}
+            testId="kpi-office-income"
+            s={s}
+            field="other_income"
           />
           <MoneyKpi label={t('dashboard.kpi_net')} testId="kpi-net" s={s} field="net_profit" />
         </div>
@@ -358,7 +368,7 @@ function MoneyKpi({
 }: {
   label: string;
   s: DashboardSummary | undefined;
-  field: 'revenue' | 'expenses' | 'net_profit';
+  field: 'revenue' | 'expenses' | 'other_income' | 'net_profit';
   invert?: boolean;
   testId: string;
 }): JSX.Element {

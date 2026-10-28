@@ -35,7 +35,8 @@ export function presetRange(preset: Exclude<Preset, 'custom'>): { from: string; 
 
 /**
  * Where a statement line's amount comes from, as a list filtered to the same period and
- * branch: transactions where that field is non-zero, or the office-expense / hawala page.
+ * branch: transactions where that amount (column or '@money:<code>') is non-zero, or the
+ * office-expense / office-income / hawala page.
  */
 export function drillDownUrl(
   source: string,
@@ -45,6 +46,10 @@ export function drillDownUrl(
   const q = new URLSearchParams({ date_from: period.from, date_to: period.to });
   if (branch) q.set('branch', String(branch));
   if (source === '@hawala_fee') return `/finance/hawala?${q}`;
+  if (source.startsWith('@office_income:')) {
+    q.set('category', source.slice('@office_income:'.length));
+    return `/finance/office-income?${q}`;
+  }
   if (source === '@office_salary' || source === '@office_expense') {
     q.set('kind', source === '@office_salary' ? 'salary' : 'non_salary');
     return `/finance/office-expenses?${q}`;

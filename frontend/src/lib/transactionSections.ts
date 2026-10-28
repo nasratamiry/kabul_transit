@@ -1,13 +1,19 @@
+import type { Names } from '@/types/api';
+
 /**
  * The 43 editable Transaction fields (operations/models.py, FIELD_SPEC in
  * config/management/commands/seed_field_config.py): which section each belongs to and how
  * it is edited. This is the single source of truth for rendering the transaction form;
  * /api/form-config/ only decides which fields are shown, required, and in what order.
  * Labels live in i18n under `form.<field>`.
+ *
+ * Revenue / expense amounts are different: /api/form-config/ sends each with its kind and
+ * names (`money`), and the form puts it in the «عواید» or «مصارف» section by kind. The 14
+ * built-in ones are Transaction columns; the types the super admin adds are '@money:<code>'.
  */
 
 export type FieldType =
-  | 'money' // DecimalField(14, 2) — customer_payment, customer_balance, the 13 expenses
+  | 'money' // DecimalField(14, 2) — customer_balance and every revenue / expense amount
   | 'decimal' // DecimalField(14, 2) that is not money — weight, scale_weight
   | 'integer' // PositiveIntegerField — quantity
   | 'rate' // DecimalField(14, 8) — exchange_rate
@@ -24,12 +30,16 @@ export const TX_KEY = ['transactions'] as const;
 export const TRADE_TYPES = ['IMPORT', 'EXPORT', 'TRANSIT', 'TIR_CARNET'] as const;
 export type TradeType = (typeof TRADE_TYPES)[number];
 
-/** Every amount deducted from customer_payment (Transaction.EXPENSE_FIELDS, same order). */
-export const EXPENSE_FIELDS = [
+/**
+ * The built-in money columns (Transaction.MONEY_COLUMNS). Whether each is revenue or expense
+ * is not fixed here: its MoneyFieldType decides (customer_payment is always revenue).
+ */
+export const MONEY_COLUMNS = [
+  'customer_payment',
   'khak_puli_cash',
   'khak_puli_bank',
-  'revenue_estras', // named «عواید» but an EXPENSE: the only revenue is customer_payment
-  'revenue_transport', // idem
+  'revenue_estras', // shown as «عواید بندر والی»; the column keeps its old name
+  'revenue_transport',
   't2_delivery_expense',
   'transit_right',
   'tariff_expense',
@@ -40,6 +50,20 @@ export const EXPENSE_FIELDS = [
   'scale_ticket_expense',
   'gate_ticket_expense',
 ] as const;
+
+/** Form-field name of an added type: '@money:<code>'. */
+export const LINE_PREFIX = '@money:';
+export const isLineField = (name: string): boolean => name.startsWith(LINE_PREFIX);
+export const lineCode = (name: string): string => name.slice(LINE_PREFIX.length);
+
+/** The two sections the money fields go to, by kind. */
+export const MONEY_SECTIONS = { REVENUE: 'revenue', EXPENSE: 'expenses' } as const;
+
+/** A type's name in the UI language (Dari when there is none). */
+export function moneyName(names: Names, lang: string): string {
+  const key = lang === 'ps' || lang === 'en' ? lang : 'fa';
+  return names[key] || names.fa;
+}
 
 export interface Section {
   key: string;
@@ -76,9 +100,9 @@ export const SECTIONS: Section[] = [
       'seal_number',
     ],
   },
-  // The one revenue field, its currency and the informational previous balance.
-  { key: 'payment', fields: ['customer_payment', 'currency', 'exchange_rate', 'customer_balance'] },
-  { key: 'expenses', fields: EXPENSE_FIELDS },
+  // Currency and rate of every amount, and the informational previous balance. The «عواید»
+  // and «مصارف» sections come after it, filled from form-config by kind.
+  { key: 'currency', fields: ['currency', 'exchange_rate', 'customer_balance'] },
   { key: 'notes', fields: ['remarks'] },
 ];
 
@@ -86,9 +110,7 @@ const typed = (fields: readonly string[], type: FieldType): [string, FieldType][
   fields.map((f) => [f, type]);
 
 export const FIELD_TYPES: Record<string, FieldType> = {
-  ...Object.fromEntries(
-    typed(['customer_payment', 'customer_balance', ...EXPENSE_FIELDS], 'money'),
-  ),
+  ...Object.fromEntries(typed(['customer_balance', ...MONEY_COLUMNS], 'money')),
   ...Object.fromEntries(typed(['weight', 'scale_weight'], 'decimal')),
   quantity: 'integer',
   exchange_rate: 'rate',
@@ -157,4 +179,7 @@ export const FK_TARGETS: Record<string, { endpoint: string; ns: string; base: st
   },
 };
 
-export const ALL_FIELDS = SECTIONS.flatMap((s) => s.fields);
+/** How a field is edited; every added type ('@money:<code>') is a money input. */
+export function fieldType(name: string): FieldType | undefined {
+  return isLineField(name) ? 'money' : FIELD_TYPES[name];
+}

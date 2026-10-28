@@ -79,8 +79,10 @@ export interface TransportCompany {
   created_at: string;
 }
 
-/** TransactionSerializer.row_summary — USD figures are null unless the record is in USD. */
+/** TransactionSerializer.row_summary — USD figures are null when the date's USD rate is unknown. */
 export interface RowSummary {
+  total_revenue_afn: string;
+  total_revenue_usd: string | null;
   total_expense_afn: string;
   fee_per_dollar_afn: string | null;
   total_expense_usd: string | null;
@@ -109,6 +111,10 @@ export interface Transaction {
   plate_afghan: string;
   plate_foreign: string;
   row_summary: RowSummary;
+  /** Amounts of the types added on «عواید و مصارف»: {code: amount} (built-in ones are columns). */
+  money_amounts: Record<string, string>;
+  /** Every non-zero amount (customer_payment always), in form order, with kind and AFN / USD. */
+  money_items: MoneyItem[];
   documents_count: number;
   documents_status: DocumentsStatus;
   created_by: number | null;
@@ -116,6 +122,58 @@ export interface Transaction {
   updated_at: string;
   /** The other editable fields (see lib/transactionSections.ts). */
   [field: string]: unknown;
+}
+
+export type MoneyKind = 'REVENUE' | 'EXPENSE';
+export type MoneySection = 'REVENUE' | 'COGS' | 'OPEX' | 'OTHER';
+export interface Names {
+  fa: string;
+  ps: string;
+  en: string;
+}
+
+/** TransactionSerializer.money_items */
+export interface MoneyItem {
+  code: string;
+  /** Column name, or '@money:<code>' for an added type. */
+  source: string;
+  kind: MoneyKind;
+  section: MoneySection;
+  names: Names;
+  is_active: boolean;
+  amount: string;
+  amount_afn: string;
+  amount_usd: string | null;
+}
+
+/** MoneyFieldTypeSerializer (/money-types/). amounts_count only in the super admin's list. */
+export interface MoneyFieldType {
+  id: number;
+  code: string;
+  /** Built-in types only: the Transaction column ('' for an added type). */
+  column: string;
+  source: string;
+  name_fa: string;
+  name_ps: string;
+  name_en: string;
+  kind: MoneyKind;
+  section: MoneySection;
+  sort_order: number;
+  is_active: boolean;
+  is_builtin: boolean;
+  /** customer_payment: always revenue, active and required. */
+  locked: boolean;
+  amounts_count: number | null;
+}
+
+/** GET /money-types/visibility/ — one branch × trade type. */
+export interface MoneyVisibilityRow {
+  money_type: number;
+  code: string;
+  visibility: FieldVisibility;
+  field_config: number | null;
+  /** Transactions of this branch × trade type holding an amount of the type. */
+  count: number;
 }
 
 /** Document type codes: T1, CMR, CUSTOMS_DECLARATION, … (admin-managed, see /document-types/). */
@@ -218,6 +276,17 @@ export interface FieldConfigRow {
   sort_order: number;
   /** Always REQUIRED (serial, date, payment, currency, rate): the API refuses any change. */
   locked: boolean;
+  /** Set for revenue / expense fields: those are managed on «عواید و مصارف», not here. */
+  money_type: number | null;
+  money: {
+    code: string;
+    source: string;
+    kind: MoneyKind;
+    section: MoneySection;
+    names: Names;
+    sort_order: number;
+    is_active: boolean;
+  } | null;
 }
 
 export interface FormConfig {
@@ -230,6 +299,8 @@ export interface FormConfig {
     visibility: 'REQUIRED' | 'OPTIONAL';
     required: boolean;
     sort_order: number;
+    /** Revenue / expense types: which section («عواید» / «مصارف») and their names. */
+    money: { code: string; kind: MoneyKind; section: MoneySection; names: Names } | null;
   }[];
 }
 
@@ -239,6 +310,8 @@ export interface PreviewSummary {
   /** Shamsi date the USD figures were computed for. */
   date: string;
   customer_payment_afn: string;
+  total_revenue_afn: string;
+  total_revenue_usd: string | null;
   total_expense_afn: string;
   profit_or_loss_afn: string;
   fee_per_dollar_afn: string | null;
@@ -259,7 +332,7 @@ export interface ExchangeRate {
   created_at: string;
 }
 
-export type StatementSection = 'REVENUE' | 'COGS' | 'OPEX' | 'OTHER';
+export type StatementSection = 'REVENUE' | 'COGS' | 'OPEX' | 'OTHER' | 'OTHER_INCOME';
 
 /** StatementLineSerializer */
 export interface StatementLine {
@@ -404,13 +477,48 @@ export interface OfficeExpenseTotals extends AmountTotals {
   non_salary: AmountTotals;
 }
 
-/** Revenue / all expenses / net of a period (finance.reports._summary). */
+/** Office-income category (/office-income-categories/); incomes_count: delete needs 0. */
+export interface OfficeIncomeCategory {
+  id: number;
+  code: string;
+  name_fa: string;
+  name_ps: string;
+  name_en: string;
+  sort_order: number;
+  is_active: boolean;
+  incomes_count: number;
+}
+
+/** OfficeIncomeSerializer — `category` is the category's code. */
+export interface OfficeIncome {
+  id: number;
+  branch: number;
+  date: string;
+  category: string;
+  category_names: Names;
+  amount: string;
+  currency: AnyCurrency;
+  rate_used: string | null;
+  amount_afn: string | null;
+  person: string;
+  reference_number: string;
+  note: string;
+  created_by: number | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Revenue / all expenses / other income / net of a period (finance.reports._summary). */
 export interface PeriodSummary {
   transactions_count: number;
   revenue_afn: string | null;
   revenue_usd: string | null;
   expenses_afn: string | null;
   expenses_usd: string | null;
+  /** Office income («سایر عواید»). */
+  other_income_afn: string | null;
+  other_income_usd: string | null;
   net_profit_afn: string | null;
   net_profit_usd: string | null;
 }
@@ -448,6 +556,8 @@ export interface IncomeStatement {
     | 'opex_usd'
     | 'other_afn'
     | 'other_usd'
+    | 'other_income_afn'
+    | 'other_income_usd'
     | 'net_profit_afn'
     | 'net_profit_usd',
     string | null

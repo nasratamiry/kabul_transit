@@ -29,8 +29,15 @@ import {
 import { useAuth } from '@/stores/auth';
 import type { IncomeStatement as Report, StatementSection } from '@/types/api';
 
-const SECTIONS: StatementSection[] = ['REVENUE', 'COGS', 'OPEX', 'OTHER'];
-const SECTION_TOTAL = { REVENUE: 'revenue', COGS: 'cogs', OPEX: 'opex', OTHER: 'other' } as const;
+// IAS 1 order: other income (the offices' own income) after the expenses, before net profit.
+const SECTIONS: StatementSection[] = ['REVENUE', 'COGS', 'OPEX', 'OTHER', 'OTHER_INCOME'];
+const SECTION_TOTAL = {
+  REVENUE: 'revenue',
+  COGS: 'cogs',
+  OPEX: 'opex',
+  OTHER: 'other',
+  OTHER_INCOME: 'other_income',
+} as const;
 
 /**
  * /reports/income-statement — IAS 1 (by function of expense) for a period, both roles (a

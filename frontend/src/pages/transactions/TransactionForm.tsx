@@ -34,9 +34,14 @@ import {
   FIELD_TYPES,
   FK_TARGETS,
   MAX_LENGTH,
+  MONEY_SECTIONS,
   SECTIONS,
   TRADE_TYPES,
   TX_KEY,
+  fieldType,
+  isLineField,
+  lineCode,
+  moneyName,
   type TradeType,
 } from '@/lib/transactionSections';
 import { useAuth } from '@/stores/auth';
@@ -57,7 +62,7 @@ const trimRate = (rate: string): string => rate.replace(/(\.\d*?)0+$/, '$1').rep
  * /transactions/new/:tradeType and /transactions/:id/edit. Loads the record (edit) and the
  * branch's form config, then renders <FormBody>. Which fields appear, required or not, and
  * in what order comes from /api/form-config/; how each is edited and its section comes from
- * lib/transactionSections.ts.
+ * lib/transactionSections.ts — except revenue / expense amounts, whose section is their kind.
  */
 export function TransactionForm(): JSX.Element {
   const { t } = useTranslation();
@@ -134,7 +139,7 @@ function initialValues(
 ): Values {
   const values: Values = {};
   for (const name of fields) {
-    const type = FIELD_TYPES[name];
+    const type = fieldType(name);
     values[name] = type === 'fk' ? null : type === 'boolean' ? false : '';
   }
   // Set after the loop: currency / exchange_rate are always part of the form, shown or not.
@@ -144,9 +149,13 @@ function initialValues(
   if ('status' in values) values.status = 'WAITING';
   if (tx) {
     for (const name of Object.keys(values)) {
+      if (isLineField(name)) {
+        values[name] = tx.money_amounts[lineCode(name)] ?? '';
+        continue;
+      }
       const v = tx[name];
       if (v === undefined) continue;
-      const type = FIELD_TYPES[name];
+      const type = fieldType(name);
       // The API returns some numbers as numbers (quantity); the inputs hold strings.
       values[name] =
         name === 'exchange_rate'
@@ -172,7 +181,7 @@ function buildSchema(fields: ConfigField[]): z.ZodType<Values, Values> {
     exchange_rate: z.string(),
   };
   for (const f of fields) {
-    const type = FIELD_TYPES[f.field_name];
+    const type = fieldType(f.field_name);
     const need = (s: z.ZodString): z.ZodString => (f.required ? s.min(1, 'common.required') : s);
     if (type === 'money' || type === 'decimal') {
       shape[f.field_name] = need(z.string().trim()).refine(
@@ -220,12 +229,25 @@ function buildSchema(fields: ConfigField[]): z.ZodType<Values, Values> {
   }) as unknown as z.ZodType<Values, Values>;
 }
 
-/** Form values → API body. Empty optional amounts are 0 (the model default), not ''. */
-function toPayload(values: Values, fields: string[], branch: number, tradeType: TradeType): Values {
+/**
+ * Form values → API body. Empty optional amounts are 0 (the model default), not ''. The
+ * added types go together as money_amounts {code: amount} ('' = no amount).
+ */
+function toPayload(
+  values: Values,
+  fields: string[],
+  branch: number,
+  tradeType: TradeType,
+): Record<string, unknown> {
   const body: Values = { branch, trade_type: tradeType };
+  const amounts: Record<string, string> = {};
   for (const name of new Set([...fields, 'currency', 'exchange_rate'])) {
-    const type = FIELD_TYPES[name];
+    const type = fieldType(name);
     const v = values[name];
+    if (isLineField(name)) {
+      amounts[lineCode(name)] = normalizeNumber(String(v ?? ''));
+      continue;
+    }
     if (type === 'money' || type === 'decimal' || type === 'integer' || type === 'rate') {
       const n = normalizeNumber(String(v ?? ''));
       body[name] = n === '' ? (type === 'rate' ? '1' : '0') : n;
@@ -236,7 +258,7 @@ function toPayload(values: Values, fields: string[], branch: number, tradeType: 
     }
   }
   if (body.currency === 'AFN') body.exchange_rate = '1';
-  return body;
+  return Object.keys(amounts).length ? { ...body, money_amounts: amounts } : body;
 }
 
 interface FormBodyProps {
@@ -258,7 +280,7 @@ function FormBody({ config, tx, branch, tradeType }: FormBodyProps): JSX.Element
 
   const draftKey = tx ? `tx:edit:${tx.id}` : `tx:new:${branch}:${tradeType}`;
   const fields = useMemo(
-    () => config.form_fields.filter((f) => FIELD_TYPES[f.field_name]),
+    () => config.form_fields.filter((f) => fieldType(f.field_name)),
     [config.form_fields],
   );
   const names = fields.map((f) => f.field_name);
@@ -311,23 +333,26 @@ function FormBody({ config, tx, branch, tradeType }: FormBodyProps): JSX.Element
   }, [currency, dayRate.data, getValues, setValue]);
 
   // Live row summary: the server computes it with the model's own formulas (debounced).
-  const previewBody = JSON.stringify(
-    Object.fromEntries(
+  const previewBody = JSON.stringify({
+    ...Object.fromEntries(
       [
         'currency',
         'exchange_rate',
         'customer_payment',
-        ...names.filter((n) => FIELD_TYPES[n] === 'money'),
+        ...names.filter((n) => !isLineField(n) && fieldType(n) === 'money'),
       ].map((n) => [n, values[n] ?? '']),
     ),
-  );
+    money_amounts: Object.fromEntries(
+      names.filter(isLineField).map((n) => [lineCode(n), values[n] ?? '']),
+    ),
+  });
   const debouncedBody = useDebounced(previewBody, 400);
   const preview = useQuery({
     queryKey: ['tx-preview', branch, debouncedBody],
     queryFn: () =>
       api.post<PreviewSummary>(
         '/transactions/preview-summary/',
-        { branch, ...(JSON.parse(debouncedBody) as Values) },
+        { branch, ...(JSON.parse(debouncedBody) as Record<string, unknown>) },
         { skipErrorToast: true },
       ),
     placeholderData: (prev) => prev,
@@ -504,17 +529,27 @@ interface FormSection {
 
 /**
  * The form's sections with the shown fields of each, in sort_order (never alphabetical).
- * exchange_rate only appears for a currency other than AFN.
+ * exchange_rate only appears for a currency other than AFN. After «ارز و نرخ» come
+ * «عواید» (customer_payment first, then every revenue type) and «مصارف»: each money field
+ * goes by its kind, whatever it is called.
  */
 function visibleSections(byName: Map<string, ConfigField>, currency: string): FormSection[] {
-  return SECTIONS.map((s) => ({
-    key: s.key,
-    fields: s.fields
-      .map((name) => byName.get(name))
-      .filter((f): f is ConfigField => Boolean(f))
-      .filter((f) => f.field_name !== 'exchange_rate' || currency !== 'AFN')
-      .sort((a, b) => a.sort_order - b.sort_order),
-  })).filter((s) => s.fields.length > 0);
+  const bySortOrder = (a: ConfigField, b: ConfigField): number => a.sort_order - b.sort_order;
+  const money = (kind: 'REVENUE' | 'EXPENSE'): FormSection => ({
+    key: MONEY_SECTIONS[kind],
+    fields: [...byName.values()].filter((f) => f.money?.kind === kind).sort(bySortOrder),
+  });
+  return SECTIONS.flatMap((s) => {
+    const section = {
+      key: s.key,
+      fields: s.fields
+        .map((name) => byName.get(name))
+        .filter((f): f is ConfigField => Boolean(f))
+        .filter((f) => f.field_name !== 'exchange_rate' || currency !== 'AFN')
+        .sort(bySortOrder),
+    };
+    return s.key === 'currency' ? [section, money('REVENUE'), money('EXPENSE')] : [section];
+  }).filter((s) => s.fields.length > 0);
 }
 
 function FormSections({
@@ -541,12 +576,19 @@ function FormSections({
 
 /**
  * The transaction form exactly as a branch manager will see it for `config` (a new record,
- * currency AFN), read-only: the super admin's field settings page previews unsaved settings
- * with it. Same sections, inputs and required marks as <FormBody>.
+ * currency AFN), read-only: the super admin's field settings and «عواید و مصارف» pages
+ * preview unsaved settings with it (`only`: just these sections). Same sections, inputs and
+ * required marks as <FormBody>.
  */
-export function FormPreview({ config }: { config: FormConfig }): JSX.Element {
+export function FormPreview({
+  config,
+  only,
+}: {
+  config: FormConfig;
+  only?: string[];
+}): JSX.Element {
   const { t } = useTranslation();
-  const fields = config.form_fields.filter((f) => FIELD_TYPES[f.field_name]);
+  const fields = config.form_fields.filter((f) => fieldType(f.field_name));
   const byName = new Map(fields.map((f) => [f.field_name, f]));
   const [defaults] = useState(() =>
     initialValues(Object.keys(FIELD_TYPES), undefined, null, new URLSearchParams()),
@@ -555,7 +597,9 @@ export function FormPreview({ config }: { config: FormConfig }): JSX.Element {
   return (
     <fieldset disabled className="min-w-0 space-y-4" aria-label={t('field_settings.preview')}>
       <FormSections
-        sections={visibleSections(byName, String(defaults.currency))}
+        sections={visibleSections(byName, String(defaults.currency)).filter(
+          (s) => !only || only.includes(s.key),
+        )}
         renderField={(f) => (
           <Field
             key={f.field_name}
@@ -594,10 +638,10 @@ function Field({
   addNewTo,
   onBeforeAddNew,
 }: FieldProps): JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const name = field.field_name;
-  const type = FIELD_TYPES[name];
-  const label = t(`form.${name}`);
+  const type = fieldType(name);
+  const label = field.money ? moneyName(field.money.names, i18n.language) : t(`form.${name}`);
   const wide = type === 'textarea';
 
   let control_: JSX.Element;
@@ -728,7 +772,7 @@ function SummaryPanel({
           {loading && <Spinner className="h-4 w-4 text-gray-400" label={t('summary.loading')} />}
         </h2>
         <dl className="divide-y divide-gray-100 text-sm dark:divide-gray-700">
-          {row(t('summary.revenue'), preview?.customer_payment_afn, 'summary-revenue')}
+          {row(t('summary.revenue'), preview?.total_revenue_afn, 'summary-revenue')}
           {row(t('summary.expenses'), preview?.total_expense_afn, 'summary-expenses')}
           <div className="flex items-baseline justify-between gap-3 pt-3">
             <dt className="font-semibold">{t('summary.balance')}</dt>
