@@ -43,7 +43,7 @@ FIELD_SPEC = [
     ('customer_balance',       'باقیات از قبل',             430, 'OPTIONAL'),
     ('khak_puli_cash',         'خاک‌پولی نقدی',              440, 'OPTIONAL'),
     ('khak_puli_bank',         'خاک‌پولی تحویلی بانک',       450, 'OPTIONAL'),
-    ('revenue_estras',         'عواید استراس',              455, 'OPTIONAL'),
+    ('revenue_estras',         'عواید بندر والی',           455, 'OPTIONAL'),
     ('revenue_transport',      'عواید ترانسپورت',           460, 'OPTIONAL'),
     ('t2_delivery_expense',    'تحویلی T2',                465, 'OPTIONAL'),
     ('transit_right',          'حق‌العبور',                470, 'OPTIONAL'),

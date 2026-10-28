@@ -113,8 +113,9 @@ try:
             'khak_puli_cash': '۲۰۰', 'plate_afghan': 'کابل ۱۲۳',
             'documents-TOTAL_FORMS': '0', 'documents-INITIAL_FORMS': '0',
         }
-        for name in Transaction.EXPENSE_FIELDS:
+        for name in Transaction.MONEY_COLUMNS:
             form.setdefault(name, '0')
+        form.update({'money_lines-TOTAL_FORMS': '0', 'money_lines-INITIAL_FORMS': '0'})
         form.update({'customer_balance': '0', 'weight': '0', 'quantity': '0', 'scale_weight': '0'})
         response = client.post('/admin/operations/transaction/add/', form)
         saved = Transaction.objects.filter(serial_number='777').first()

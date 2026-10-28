@@ -1,4 +1,5 @@
-from django_filters.rest_framework import ChoiceFilter, DjangoFilterBackend, FilterSet
+from django.db.models import Count
+from django_filters.rest_framework import CharFilter, ChoiceFilter, DjangoFilterBackend, FilterSet
 from rest_framework import filters, viewsets
 from rest_framework.exceptions import PermissionDenied
 
@@ -6,9 +7,10 @@ from api.filters import ShamsiDateFilter
 from api.history import HistoryMixin
 from api.mixins import PortScopedQuerysetMixin, own_branch_kwargs
 from api.pagination import StandardPagination
-from api.permissions import IsBranchStaff, IsSuperAdmin
-from api.serializers import ExchangeRateSerializer, HawalaSerializer, OfficeExpenseSerializer
-from finance.models import ExchangeRate, Hawala, OfficeExpense
+from api.permissions import IsBranchStaff, IsSuperAdmin, ReadOnlyForBranch
+from api.serializers import (ExchangeRateSerializer, HawalaSerializer, OfficeExpenseSerializer,
+                             OfficeIncomeCategorySerializer, OfficeIncomeSerializer)
+from finance.models import ExchangeRate, Hawala, OfficeExpense, OfficeIncome, OfficeIncomeCategory
 from finance.reports import amount_totals
 from finance.utils import kabul_today, require_todays_usd_rate
 
@@ -46,6 +48,21 @@ class OfficeExpenseFilter(FilterSet):
     def filter_kind(self, queryset, name, value):
         salary = OfficeExpense.Category.SALARY
         return queryset.filter(category=salary) if value == 'salary' else queryset.exclude(category=salary)
+
+
+class OfficeIncomeFilter(FilterSet):
+    date = ShamsiDateFilter(field_name='date')
+    date_from = ShamsiDateFilter(field_name='date', lookup_expr='gte')
+    date_to = ShamsiDateFilter(field_name='date', lookup_expr='lte')
+    # Income-statement drill-down: ?category=<code> (one «سایر عواید» line per category).
+    category = CharFilter(method='filter_category', label='کتگوری (کود)')
+
+    class Meta:
+        model = OfficeIncome
+        fields = ['branch', 'currency']
+
+    def filter_category(self, queryset, name, value):
+        return queryset.filter(category__code=value.strip().upper())
 
 
 class ExchangeRateViewSet(viewsets.ModelViewSet):
@@ -108,6 +125,40 @@ class HawalaViewSet(TotalsListMixin, HistoryMixin, PortScopedQuerysetMixin, view
 
     def perform_update(self, serializer):
         serializer.save(**own_branch_kwargs(self.request.user))
+
+
+class OfficeIncomeViewSet(TotalsListMixin, HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelViewSet):
+    """An office's own income (both roles, own branch for a manager); «سایر عواید» of the income statement."""
+    queryset = OfficeIncome.objects.select_related('branch', 'created_by', 'category')
+    serializer_class = OfficeIncomeSerializer
+    permission_classes = [IsBranchStaff]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = OfficeIncomeFilter
+    search_fields = ['person', 'reference_number', 'note']
+    ordering = ['-date', '-id']
+
+    def totals(self, queryset):
+        """All, and per category code (each one income-statement line)."""
+        return amount_totals(list(queryset), 'amount', group_by='category_code')
+
+    def perform_create(self, serializer):
+        require_todays_usd_rate()
+        user = self.request.user
+        serializer.save(created_by=user, **own_branch_kwargs(user))
+
+    def perform_update(self, serializer):
+        serializer.save(**own_branch_kwargs(self.request.user))
+
+
+class OfficeIncomeCategoryViewSet(HistoryMixin, viewsets.ModelViewSet):
+    """Every role reads the categories (form, filter); only the super admin changes them. Delete needs no incomes."""
+    branch_field = None  # company-wide
+    queryset = OfficeIncomeCategory.objects.annotate(incomes_count=Count('incomes')).order_by('sort_order', 'code')
+    serializer_class = OfficeIncomeCategorySerializer
+    permission_classes = [ReadOnlyForBranch]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['is_active']
+    pagination_class = None
 
 
 class OfficeExpenseViewSet(TotalsListMixin, HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelViewSet):

@@ -32,6 +32,8 @@ from rest_framework.test import APIClient  # noqa: E402
 
 from accounts.models import Branch, User  # noqa: E402
 from finance.management.commands.seed_statement_lines import STANDARD_LINES  # noqa: E402
+from finance.models import OfficeIncomeCategory  # noqa: E402
+from operations.models import MoneyFieldType  # noqa: E402
 from finance.models import ExchangeRate, Hawala, OfficeExpense, StatementLine, statement_source_choices  # noqa: E402
 from finance.reports import current_shamsi_month, income_statement  # noqa: E402
 from finance.utils import kabul_today  # noqa: E402
@@ -113,7 +115,7 @@ try:
             check('بخش نامعتبر → CheckConstraint در MySQL', False)
         except IntegrityError as exc:
             check('بخش نامعتبر → CheckConstraint در MySQL', 'statementline_section_valid' in str(exc), str(exc)[:80])
-        check('REVENUE با منبعی غیر از customer_payment → ValidationError',
+        check('REVENUE با منبع مصرفی → ValidationError (فقط نوع عاید در بخش عاید)',
               invalid(StatementLine(code='REV_X', section='REVENUE', source_field='seal_expense', label_fa='x'),
                       'source_field'))
         check('منبعی که فیلد پولی معامله نیست → ValidationError',
@@ -124,7 +126,7 @@ try:
         check('code با حروف کوچک → ValidationError',
               invalid(StatementLine(code='cogs_lower', section='COGS', source_field='seal_expense', label_fa='x',
                                     is_active=False), 'code'))
-        check('customer_payment بیرون از REVENUE → ValidationError (یگانه عاید)',
+        check('customer_payment بیرون از REVENUE → ValidationError (همیشه عاید)',
               invalid(StatementLine(code='COGS_PAY', section='COGS', source_field='customer_payment', label_fa='x',
                                     is_active=False), 'section'))
         check('دو سطر فعال با یک منبع → ValidationError (دوبار شمردن)',
@@ -132,7 +134,10 @@ try:
                       'source_field'))
 
         print('ب) دستور seed')
-        check(f'seed تازه → {len(STANDARD_LINES)} سطر ساخته شد', result.get('created') == len(STANDARD_LINES),
+        # The standard lines plus one per office-income category and per added revenue / expense type.
+        all_lines = (len(STANDARD_LINES) + OfficeIncomeCategory.objects.count()
+                     + MoneyFieldType.objects.filter(column='').count())
+        check(f'seed تازه → {all_lines} سطر ساخته شد', result.get('created') == all_lines,
               str(result))
         gate = StatementLine.objects.get(code='COGS_GATE')
         gate.label_fa = 'برچسب سفارشی'
@@ -140,7 +145,7 @@ try:
         again = seed()
         gate.refresh_from_db()
         check('اجرای دوباره → ۰ تازه، بی‌تکرار، تغییر سوپر ادمین سالم ماند',
-              again.get('created') == 0 and StatementLine.objects.count() == len(STANDARD_LINES)
+              again.get('created') == 0 and StatementLine.objects.count() == all_lines
               and gate.label_fa == 'برچسب سفارشی', str(again))
         reset = seed(reset=True)
         gate.refresh_from_db()
@@ -148,9 +153,9 @@ try:
               str(reset))
         valid = dict(statement_source_choices())
         sources = [row[2] for row in STANDARD_LINES]
-        check('همهٔ منابع seed واقعی هستند و هر فیلد مصرف معامله دقیقاً یک بار آمده',
+        check('همهٔ منابع seed واقعی هستند و هر ستون پولی معامله دقیقاً یک بار آمده',
               all(source in valid for source in sources) and len(set(sources)) == len(sources)
-              and set(Transaction.EXPENSE_FIELDS) <= set(sources))
+              and set(Transaction.MONEY_COLUMNS) <= set(sources))
 
         print('ج) سرویس income_statement()')
         branch_a = Branch.objects.create(name='بندر آزمایشی الف', code='ZZSTA')
@@ -161,7 +166,7 @@ try:
 
         empty = income_statement(branch_a.pk, j('1404-01-01'), j('1404-01-31'))
         check('بازهٔ خالی → همه صفر، بدون خطا',
-              all(value == '0.00' for value in empty['totals'].values()) and len(empty['lines']) == len(STANDARD_LINES),
+              all(value == '0.00' for value in empty['totals'].values()) and len(empty['lines']) == all_lines,
               f"net={empty['totals']['net_profit_afn']}")
 
         def tx(serial, day, currency, rate=D('1'), branch=branch_a, **amounts):

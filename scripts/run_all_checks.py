@@ -47,7 +47,8 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
 BACKEND_SCRIPTS = ['verify_field_config', 'verify_transaction', 'verify_finance', 'verify_api',
-                   'verify_statement', 'verify_security', 'verify_documents', 'verify_kabul_day']
+                   'verify_statement', 'verify_security', 'verify_documents', 'verify_kabul_day',
+                   'verify_money_types']
 
 # name, fixture script, setup args, cleanup args, verify script, password env, extra env
 E2E_STAGES = [

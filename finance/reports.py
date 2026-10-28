@@ -2,9 +2,11 @@
 IAS 1 (light) income statement, by function of expense:
 
     revenue − cost of services (COGS) = gross profit
-    gross profit − operating expenses (OPEX) − other = net profit
+    gross profit − operating expenses (OPEX) − other expenses + other income = net profit
 
-Pure functions, no HTTP. Amounts are Decimal strings with 2 places.
+Revenue is customer_payment and every revenue type the super admin added; other income is the
+offices' own income (OfficeIncome), one line per category. Pure functions, no HTTP. Amounts are
+Decimal strings with 2 places.
 """
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -13,13 +15,16 @@ import jdatetime
 from django.db.models import Count, DecimalField, F, Sum
 
 from accounts.models import Branch
-from operations.models import Transaction
+from operations.models import MoneyFieldType, Transaction, TransactionMoneyLine
+from operations.money import LINE_PREFIX
 
-from .models import SPECIAL_SOURCES, ExchangeRate, Hawala, OfficeExpense, StatementLine
+from .models import (OFFICE_INCOME_PREFIX, SPECIAL_SOURCES, ExchangeRate, Hawala, OfficeExpense, OfficeIncome,
+                     OfficeIncomeCategory, StatementLine)
 from .utils import UsdRateTable, kabul_today
 
 SECTION_ORDER = [StatementLine.Section.REVENUE, StatementLine.Section.COGS,
-                 StatementLine.Section.OPEX, StatementLine.Section.OTHER]
+                 StatementLine.Section.OPEX, StatementLine.Section.OTHER, StatementLine.Section.OTHER_INCOME]
+EXPENSE_SECTIONS = (StatementLine.Section.COGS, StatementLine.Section.OPEX, StatementLine.Section.OTHER)
 CENT = Decimal('0.01')
 AFN, USD = Transaction.Currency.AFN, Transaction.Currency.USD
 
@@ -103,8 +108,18 @@ class _Buckets:
         return sum(n for key, n in self.counts.items() if keep(key))
 
 
+def _group_afn_usd(raw, afn_at_rate, currency, day, usd_rates):
+    """One grouped SQL sum (own currency, and × exchange_rate) → (AFN, USD), like the transactions' own figures."""
+    raw = raw or Decimal('0')
+    afn = raw if currency == AFN else (afn_at_rate or Decimal('0'))
+    if currency == USD:
+        return afn, raw
+    usd_rate = usd_rates.on(day)
+    return afn, (afn / usd_rate if usd_rate else None)
+
+
 def _transaction_amounts(fields, period, branch_id, usd_rates, buckets):
-    """Transaction amounts into `buckets` (grouped by branch + date + currency in one SQL query)."""
+    """Transaction column amounts into `buckets` (grouped by branch + date + currency in one SQL query)."""
     qs = Transaction.objects.filter(date__range=period)
     if branch_id:
         qs = qs.filter(branch_id=branch_id)
@@ -117,14 +132,24 @@ def _transaction_amounts(fields, period, branch_id, usd_rates, buckets):
         key = (group['branch_id'], group['date'])
         buckets.counts[key] = buckets.counts.get(key, 0) + group['tx_count']
         for field in fields:
-            raw = group[f'{field}__raw'] or Decimal('0')
-            afn = raw if group['currency'] == AFN else (group[f'{field}__afn'] or Decimal('0'))
-            if group['currency'] == USD:
-                usd = raw
-            else:
-                usd_rate = usd_rates.on(group['date'])
-                usd = afn / usd_rate if usd_rate else None
-            buckets.add(key, field, afn, usd)
+            buckets.add(key, field, *_group_afn_usd(group[f'{field}__raw'], group[f'{field}__afn'],
+                                                    group['currency'], group['date'], usd_rates))
+
+
+def _line_amounts(sources, period, branch_id, usd_rates, buckets):
+    """Amounts of the added revenue / expense types ('@money:<code>') into `buckets`, one grouped query."""
+    codes = [source[len(LINE_PREFIX):] for source in sources]
+    qs = TransactionMoneyLine.objects.filter(transaction__date__range=period, field_type__code__in=codes)
+    if branch_id:
+        qs = qs.filter(transaction__branch_id=branch_id)
+    big = DecimalField(max_digits=32, decimal_places=10)
+    groups = (qs.values('transaction__branch_id', 'transaction__date', 'transaction__currency', 'field_type__code')
+              .annotate(raw=Sum('amount'), afn=Sum(F('amount') * F('transaction__exchange_rate'), output_field=big))
+              .order_by())
+    for g in groups:
+        buckets.add((g['transaction__branch_id'], g['transaction__date']), LINE_PREFIX + g['field_type__code'],
+                    *_group_afn_usd(g['raw'], g['afn'], g['transaction__currency'], g['transaction__date'],
+                                    usd_rates))
 
 
 def _record_afn_usd(record, amount, usd_rates):
@@ -166,6 +191,19 @@ def amount_totals(records, field='amount', group_by=None):
     }
 
 
+def _office_income_amounts(sources, period, branch_id, usd_rates, warnings, buckets):
+    """Office incomes ('@office_income:<category code>') into `buckets`, each at its own snapshot rate."""
+    codes = [source[len(OFFICE_INCOME_PREFIX):] for source in sources]
+    incomes = OfficeIncome.objects.filter(date__range=period, category__code__in=codes).select_related('category')
+    if branch_id:
+        incomes = incomes.filter(branch_id=branch_id)
+    for income in incomes:
+        converted, rate = _record_afn_usd(income, income.amount, usd_rates)
+        buckets.add((income.branch_id, income.date), income.category.source, *converted)
+        if income.currency != AFN and rate is None:
+            warnings.append(f'عاید دفتر شماره {income.pk}: نرخ {income.currency} برای {income.date} نیست.')
+
+
 def _special_amounts(sources, period, branch_id, usd_rates, warnings, buckets):
     """Office expenses (salary / everything else) and hawala fees into `buckets`, each at its own snapshot rate."""
     if '@office_expense' in sources or '@office_salary' in sources:
@@ -191,15 +229,21 @@ def _special_amounts(sources, period, branch_id, usd_rates, warnings, buckets):
 
 
 def _summary(lines, amounts, count):
-    """Revenue, expenses (COGS + OPEX + other) and net profit of {source: _Amount}, line by line as the statement adds them."""
-    revenue, expenses = _Amount(), _Amount()
+    """
+    Revenue, expenses (COGS + OPEX + other), other income (office income) and net profit of
+    {source: _Amount}, line by line as the statement adds them.
+    """
+    revenue, expenses, other_income = _Amount(), _Amount(), _Amount()
     for line in lines:
-        (revenue if line.section == StatementLine.Section.REVENUE else expenses).combine(amounts[line.source_field])
-    net = _Amount().combine(revenue).combine(expenses, sign=-1)
+        target = {StatementLine.Section.REVENUE: revenue,
+                  StatementLine.Section.OTHER_INCOME: other_income}.get(line.section, expenses)
+        target.combine(amounts[line.source_field])
+    net = _Amount().combine(revenue).combine(expenses, sign=-1).combine(other_income)
     return {
         'transactions_count': count,
         'revenue_afn': _money(revenue.afn), 'revenue_usd': _money(revenue.usd),
         'expenses_afn': _money(expenses.afn), 'expenses_usd': _money(expenses.usd),
+        'other_income_afn': _money(other_income.afn), 'other_income_usd': _money(other_income.usd),
         'net_profit_afn': _money(net.afn), 'net_profit_usd': _money(net.usd),
     }
 
@@ -221,13 +265,20 @@ def income_statement(branch_id=None, date_from=None, date_to=None, breakdown=Fal
 
     lines = list(StatementLine.objects.filter(is_active=True))
     usd_rates = UsdRateTable(until=date_to)
-    field_sources = [line.source_field for line in lines if line.source_field not in SPECIAL_SOURCES]
-    special_sources = [line.source_field for line in lines if line.source_field in SPECIAL_SOURCES]
+    active = [line.source_field for line in lines]
+    column_sources = [source for source in active if source in Transaction.MONEY_COLUMNS]
+    line_sources = [source for source in active if source.startswith(LINE_PREFIX)]
+    income_sources = [source for source in active if source.startswith(OFFICE_INCOME_PREFIX)]
+    special_sources = [source for source in active if source in SPECIAL_SOURCES]
     buckets = _Buckets()
-    if field_sources:
-        _transaction_amounts(field_sources, period, branch_id, usd_rates, buckets)
+    # Always run: it also counts the period's transactions, whatever lines are active.
+    _transaction_amounts(column_sources, period, branch_id, usd_rates, buckets)
+    if line_sources:
+        _line_amounts(line_sources, period, branch_id, usd_rates, buckets)
+    if income_sources:
+        _office_income_amounts(income_sources, period, branch_id, usd_rates, warnings, buckets)
     _special_amounts(special_sources, period, branch_id, usd_rates, warnings, buckets)
-    sources = field_sources + special_sources
+    sources = column_sources + line_sources + income_sources + special_sources
     amounts = buckets.total(sources)
     transaction_count = buckets.count()
 
@@ -246,13 +297,16 @@ def income_statement(branch_id=None, date_from=None, date_to=None, breakdown=Fal
 
     revenue, cogs = section_totals['REVENUE'], section_totals['COGS']
     opex, other = section_totals['OPEX'], section_totals['OTHER']
+    other_income = section_totals['OTHER_INCOME']
     gross = _Amount().combine(revenue).combine(cogs, sign=-1)
-    net = _Amount().combine(gross).combine(opex, sign=-1).combine(other, sign=-1)
+    net = (_Amount().combine(gross).combine(opex, sign=-1).combine(other, sign=-1)
+           .combine(other_income))
 
     # Sources with no active line are silently missing from the totals: say so.
     covered = {line.source_field for line in lines}
-    all_sources = ['customer_payment', *Transaction.EXPENSE_FIELDS, *SPECIAL_SOURCES]
-    unmapped = [source for source in all_sources if source not in covered]
+    all_sources = [*(t.source for t in MoneyFieldType.objects.all()), *Transaction.MONEY_COLUMNS,
+                   *SPECIAL_SOURCES, *(c.source for c in OfficeIncomeCategory.objects.all())]
+    unmapped = list(dict.fromkeys(source for source in all_sources if source not in covered))
     if unmapped:
         warnings.append('این منابع در هیچ سطر فعالی نیستند و در گزارش حساب نشده‌اند: ' + '، '.join(unmapped))
     if usd_rates.missing_dates:
@@ -272,6 +326,7 @@ def income_statement(branch_id=None, date_from=None, date_to=None, breakdown=Fal
             'gross_profit_afn': _money(gross.afn), 'gross_profit_usd': _money(gross.usd),
             'opex_afn': _money(opex.afn), 'opex_usd': _money(opex.usd),
             'other_afn': _money(other.afn), 'other_usd': _money(other.usd),
+            'other_income_afn': _money(other_income.afn), 'other_income_usd': _money(other_income.usd),
             'net_profit_afn': _money(net.afn), 'net_profit_usd': _money(net.usd),
         },
         'warnings': warnings,

@@ -11,7 +11,7 @@ from kabulcargo_backend.utils import dual_date
 
 from finance.admin import TodayRateRequiredAdminMixin
 
-from .models import Document, DocumentType, Transaction
+from .models import Document, DocumentType, MoneyFieldType, Transaction, TransactionMoneyLine
 
 
 def _money(value):
@@ -62,10 +62,46 @@ class DocumentInline(admin.TabularInline):
         return dual_date(obj.uploaded_at) if obj.pk else '—'
 
 
+class MoneyLineInline(admin.TabularInline):
+    """Amounts of the revenue / expense types added on «عواید و مصارف» (the built-in ones are columns above)."""
+    model = TransactionMoneyLine
+    extra = 0
+    fields = ('field_type', 'amount', 'note')
+    verbose_name = 'مبلغ نوع اضافه‌شده'
+    verbose_name_plural = 'مبالغ انواع اضافه‌شدهٔ عاید / مصرف'
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'field_type':
+            kwargs['queryset'] = MoneyFieldType.objects.filter(column='')
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+@admin.register(MoneyFieldType)
+class MoneyFieldTypeAdmin(SimpleHistoryAdmin):
+    list_display = ('name_fa', 'code', 'kind', 'section', 'sort_order', 'is_active', 'is_builtin')
+    list_filter = ('kind', 'section', 'is_active', 'is_builtin')
+    search_fields = ('code', 'name_fa', 'name_ps', 'name_en')
+    ordering = ('sort_order', 'code')
+    fieldsets = (
+        ('نوع', {'fields': ('code', 'name_fa', 'name_ps', 'name_en'),
+                 'description': 'هر مبلغ فقط وقتی عاید است که نوع آن «عاید» باشد. «پرداخت مشتری» همیشه عاید است. '
+                                'نوع (عاید / مصرف) فقط تا وقتی تغییر می‌کند که هیچ معامله‌ای مبلغ آن را ندارد.'}),
+        ('حساب', {'fields': ('kind', 'section')}),
+        ('نمایش', {'fields': ('sort_order', 'is_active', 'is_builtin', 'column')}),
+    )
+
+    def get_readonly_fields(self, request, obj=None):
+        return ('code', 'is_builtin', 'column') if obj else ('is_builtin', 'column')
+
+    def has_delete_permission(self, request, obj=None):
+        # A built-in type is a column: deactivate it instead. An added one with amounts is PROTECTed.
+        return obj is None or not obj.column
+
+
 @admin.register(Transaction)
 class TransactionAdmin(TodayRateRequiredAdminMixin, SimpleHistoryAdmin):
     form = TransactionForm
-    inlines = [DocumentInline]
+    inlines = [MoneyLineInline, DocumentInline]
     formfield_overrides = {jmodels.jDateField: {'widget': AdminjDateWidget}}
 
     list_display = ('serial_number', 'trade_type', 'branch', 'date_display', 'trader', 'plate_afghan',
@@ -94,7 +130,8 @@ class TransactionAdmin(TodayRateRequiredAdminMixin, SimpleHistoryAdmin):
             'seal_number',
         )}),
         ('بخش مالی', {
-            'description': 'یگانه عاید «پرداخت مشتری» است. همه مبالغ دیگر مصرف هستند و از بیلانس کم می‌شوند.',
+            'description': '«پرداخت مشتری» همیشه عاید است. هر مبلغ دیگر عاید یا مصرف است، همان‌طور که سوپر ادمین '
+                           'نوع آن را در «عواید و مصارف» تعیین کرده (بیلانس = جملهٔ عواید − جملهٔ مصارف).',
             'fields': (
                 ('customer_payment', 'currency', 'exchange_rate'),
                 ('khak_puli_cash', 'khak_puli_bank'),

@@ -2,13 +2,13 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from simple_history.models import HistoricalRecords
 
-from operations.models import Transaction
+from operations.models import MoneyFieldType, Transaction
 
 # Set by the page itself (one page per branch + trade type), never by FieldConfig.
 _NOT_CONFIGURABLE = {'branch', 'trade_type'}
 
 # Always REQUIRED, in every branch and trade type: without them a transaction cannot be saved
-# (serial_number has no default) or its single revenue cannot be converted to AFN.
+# (serial_number has no default) or its revenue cannot be converted to AFN.
 LOCKED_FIELDS = ('serial_number', 'date', 'customer_payment', 'currency', 'exchange_rate')
 
 
@@ -23,9 +23,10 @@ def configurable_transaction_fields():
 
 class FieldConfig(models.Model):
     """
-    Per-branch, per-trade-type visibility rule for every Transaction field.
-    Super admin controls which fields appear, which are required, and in what
-    order. The frontend's dynamic form reads this.
+    Per-branch, per-trade-type visibility rule for every Transaction field, and for every
+    revenue / expense type (money_type set; added types use field_name '@money:<code>').
+    Super admin controls which fields appear, which are required, and in what order (money
+    types: in MoneyFieldType.sort_order). The frontend's dynamic form reads this.
     """
 
     class Visibility(models.TextChoices):
@@ -44,6 +45,9 @@ class FieldConfig(models.Model):
                                   choices=Visibility.choices, default=Visibility.OPTIONAL)
     sort_order = models.PositiveIntegerField('ترتیب نمایش', default=100,
                                              help_text='عدد کمتر = بالاتر در فورم')
+    money_type = models.ForeignKey(MoneyFieldType, verbose_name='نوع عاید / مصرف', on_delete=models.CASCADE,
+                                   null=True, blank=True, editable=False, related_name='field_configs',
+                                   help_text='برای فیلدهای پولی؛ این ردیف‌ها در صفحهٔ «عواید و مصارف» اداره می‌شوند')
 
     history = HistoricalRecords(verbose_name='تاریخچهٔ تنظیم فیلد')
 
@@ -59,8 +63,10 @@ class FieldConfig(models.Model):
         return f'{self.branch} / {self.get_trade_type_display()} / {self.field_label_fa}'
 
     def clean(self):
-        # field_name must be a Transaction field that a form can actually show
-        if self.field_name not in dict(configurable_transaction_fields()):
+        # field_name must be a Transaction field that a form can actually show, or an added money type
+        known = (MoneyFieldType.objects.filter(code=self.field_name[len('@money:'):]).exists()
+                 if self.field_name.startswith('@money:') else self.field_name in dict(configurable_transaction_fields()))
+        if not known:
             raise ValidationError({'field_name': f'فیلد «{self.field_name}» در مدل معامله موجود نیست.'})
         if self.field_name in LOCKED_FIELDS and self.visibility != self.Visibility.REQUIRED:
             raise ValidationError({'visibility': f'فیلد «{self.field_label_fa}» قفل است و همیشه «اجباری» '
@@ -92,6 +98,29 @@ class DocumentRequirement(models.Model):
 
     def __str__(self):
         return f'{self.branch} / {self.get_trade_type_display()} / {self.doc_type.name_fa}'
+
+
+def money_field_rows(branches=None, money_types=None):
+    """
+    Unsaved FieldConfig rows (OPTIONAL) for every branch × trade type × added money type that
+    has none yet. The built-in money columns get theirs from FIELD_SPEC like any other field.
+    """
+    from accounts.models import Branch
+
+    branches = list(Branch.objects.all() if branches is None else branches)
+    money_types = [t for t in (MoneyFieldType.objects.filter(column='') if money_types is None else money_types)
+                   if not t.column]
+    existing = set(FieldConfig.objects.filter(branch__in=branches, money_type__in=money_types)
+                   .values_list('branch_id', 'trade_type', 'money_type_id'))
+    return [
+        FieldConfig(branch=branch, trade_type=trade_type, field_name=money_type.source,
+                    field_label_fa=money_type.name_fa, visibility=FieldConfig.Visibility.OPTIONAL,
+                    sort_order=money_type.sort_order, money_type=money_type)
+        for branch in branches
+        for trade_type in Transaction.TradeType.values
+        for money_type in money_types
+        if (branch.pk, trade_type, money_type.pk) not in existing
+    ]
 
 
 def missing_requirement_rows(branches=None, doc_types=None):

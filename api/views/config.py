@@ -53,6 +53,8 @@ class FieldConfigViewSet(HistoryMixin, viewsets.ModelViewSet):
     (PATCH bulk/), copy/ to another branch or trade type (or every other branch), reset/ to the
     FIELD_SPEC defaults. usage/ counts the transactions holding a value per field, so the page
     can warn before a field with data is hidden. Every changed row writes its own history row.
+    Revenue / expense rows (money_type set) are managed on the «عواید و مصارف» page
+    (/api/money-types/): bulk/ refuses them, copy/ and reset/ leave them alone.
     """
     queryset = FieldConfig.objects.select_related('branch')
     serializer_class = FieldConfigSerializer
@@ -81,6 +83,9 @@ class FieldConfigViewSet(HistoryMixin, viewsets.ModelViewSet):
             if len({(obj.branch_id, obj.trade_type) for obj in objects.values()}) != 1:
                 raise serializers.ValidationError(
                     {'detail': 'همهٔ ردیف‌ها باید از یک بندر و یک نوع معامله باشند.'})
+            if any(obj.money_type_id for obj in objects.values()):
+                raise serializers.ValidationError(
+                    {'detail': 'فیلدهای عاید و مصرف در صفحهٔ «مدیریت ← عواید و مصارف» تنظیم می‌شوند.'})
             errors, changed = {}, 0
             for row in rows.validated_data:
                 obj = objects[row['id']]
@@ -102,8 +107,8 @@ class FieldConfigViewSet(HistoryMixin, viewsets.ModelViewSet):
         data.is_valid(raise_exception=True)
         values = data.validated_data
         target_type = values['target_trade_type']
-        source = FieldConfig.objects.filter(branch=values['source_branch'],
-                                            trade_type=values['source_trade_type'])
+        source = FieldConfig.objects.filter(branch=values['source_branch'], trade_type=values['source_trade_type'],
+                                            money_type__isnull=True)
         targets = (list(Branch.objects.exclude(pk=values['source_branch'].pk)) if values['all_branches']
                    else [values['target_branch']])
         changed = 0
@@ -129,7 +134,7 @@ class FieldConfigViewSet(HistoryMixin, viewsets.ModelViewSet):
             existing = {row.field_name: row for row in FieldConfig.objects.select_for_update().filter(
                 branch=branch, trade_type=trade_type)}
             for row_type, name, defaults in default_field_configs():
-                if row_type == trade_type:
+                if row_type == trade_type and name not in Transaction.MONEY_COLUMNS:
                     row = existing.get(name) or FieldConfig(branch=branch, trade_type=trade_type, field_name=name)
                     changed += _apply(row, defaults)
         return Response({'changed': changed})
@@ -181,6 +186,6 @@ class FormConfigView(views.APIView):
                                 status=status.HTTP_400_BAD_REQUEST)
         if not Branch.objects.filter(pk=branch_id).exists():
             return Response({'detail': 'بندر پیدا نشد.'}, status=status.HTTP_404_NOT_FOUND)
-        rows = list(FieldConfig.objects.filter(branch_id=branch_id, trade_type=trade_type))
+        rows = list(FieldConfig.objects.filter(branch_id=branch_id, trade_type=trade_type).select_related('money_type'))
         payload = {'branch': int(branch_id), 'trade_type': trade_type, 'form_fields': rows}
         return Response(FormConfigSerializer(payload).data)

@@ -15,7 +15,7 @@ from django_filters.rest_framework import DjangoFilterBackend, FilterSet
 from rest_framework import filters, serializers, viewsets
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.response import Response
 
@@ -28,14 +28,14 @@ from api.pagination import OptionalPagination, StandardPagination
 from api.permissions import IsBranchStaff, IsSuperAdmin, ReadOnlyForBranch
 from api.serializers import (DocumentRequirementSerializer, DocumentSerializer, DocumentTypeSerializer,
                              TransactionSerializer)
+from api.serializers.operations import parse_amount
 from config.models import DocumentRequirement
 from finance.utils import attach_usd_rates, kabul_today, require_todays_usd_rate
 from kabulcargo_backend.security import log_event
 from kabulcargo_backend.utils import dual_date, normalize_digits, parse_decimal
 from operations.documents import attach_documents_status, missing_documents_condition
-from operations.models import Document, DocumentType, Transaction
-
-_MONEY_FIELDS = ('customer_payment', *Transaction.EXPENSE_FIELDS)
+from operations.models import Document, DocumentType, Transaction, TransactionMoneyLine
+from operations.money import LINE_PREFIX, MoneyTypes, attach_money
 
 
 def _decimal_or(value, default):
@@ -59,10 +59,9 @@ class TransactionFilter(FilterSet):
     has_documents = django_filters.BooleanFilter(method='filter_has_documents', label='دارای سند')
     missing_documents = django_filters.BooleanFilter(method='filter_missing_documents', label='سند ناقص')
     doc_type = django_filters.CharFilter(method='filter_doc_type', label='دارای نوع سند (کود)')
-    # Income-statement drill-down: rows where this money field (customer_payment or an expense) is non-zero.
-    nonzero = django_filters.ChoiceFilter(
-        method='filter_nonzero', label='فیلد غیر صفر',
-        choices=[(name, name) for name in ('customer_payment', *Transaction.EXPENSE_FIELDS)])
+    # Income-statement drill-down: rows where this revenue / expense type (a built-in column or
+    # '@money:<code>') is non-zero.
+    nonzero = django_filters.CharFilter(method='filter_nonzero', label='مبلغ غیر صفر')
 
     class Meta:
         model = Transaction
@@ -82,7 +81,13 @@ class TransactionFilter(FilterSet):
                                                               doc_type__code=value.strip().upper())))
 
     def filter_nonzero(self, queryset, name, value):
-        return queryset.exclude(**{value: 0})
+        if value in Transaction.MONEY_COLUMNS:
+            return queryset.exclude(**{value: 0})
+        if value.startswith(LINE_PREFIX):
+            code = value[len(LINE_PREFIX):].strip().upper()
+            return queryset.filter(Exists(TransactionMoneyLine.objects.filter(
+                transaction=OuterRef('pk'), field_type__code=code).exclude(amount=0)))
+        raise ValidationError({'nonzero': 'این فیلد یک مبلغ معامله نیست.'})
 
 
 class TransactionViewSet(HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -104,6 +109,7 @@ class TransactionViewSet(HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelVi
         if page is not None:
             attach_usd_rates(page)
             attach_documents_status(page)
+            attach_money(page)
         return page
 
     def perform_create(self, serializer):
@@ -125,6 +131,7 @@ class TransactionViewSet(HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelVi
             return Response({'detail': f'بیشتر از {MAX_EXPORT_ROWS} معامله؛ بازهٔ تاریخ را کوچک‌تر کنید.'},
                             status=400)
         attach_usd_rates(rows)
+        types = attach_money(rows)
         user, params = request.user, request.query_params
         branch = normalize_digits(params.get('branch') or '')
         if user.is_branch_manager:
@@ -134,7 +141,7 @@ class TransactionViewSet(HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelVi
         else:
             branch_label = 'همهٔ بندرها'
         period = f"\u200e{params.get('date_from') or '…'}\u200e تا \u200e{params.get('date_to') or '…'}\u200e"
-        content = transactions_workbook(rows, branch_label, period, dual_date(timezone.now()))
+        content = transactions_workbook(rows, types, branch_label, period, dual_date(timezone.now()))
         log_event('export', request, kind='transactions', rows=len(rows), query=params.urlencode()[:300])
         return xlsx_response(content, f'transactions_{kabul_today()}.xlsx')
 
@@ -145,7 +152,8 @@ class TransactionViewSet(HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelVi
         live panel next to the form. Nothing is saved or validated strictly: unparseable
         amounts count as 0 and an unknown currency as AFN, so a half-filled form still gets
         numbers. The figures come from the model's own properties, so they always match what
-        the saved row will show. A branch manager may only preview their own branch.
+        the saved row will show. Built-in amounts come as their column names, the added types
+        as money_amounts {code: amount}. A branch manager may only preview their own branch.
         """
         user = request.user
         branch = normalize_digits(str(request.data.get('branch') or ''))
@@ -164,9 +172,21 @@ class TransactionViewSet(HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelVi
                          exchange_rate=_decimal_or(request.data.get('exchange_rate'), Decimal('1')))
         if currency == Transaction.Currency.AFN or tx.exchange_rate <= 0:
             tx.exchange_rate = Decimal('1')
-        for name in _MONEY_FIELDS:
-            setattr(tx, name, _decimal_or(request.data.get(name), Decimal('0')))
-        tx.balance = tx.customer_payment - tx.total_expense  # what save() would store
+        for name in Transaction.MONEY_COLUMNS:
+            setattr(tx, name, max(_decimal_or(request.data.get(name), Decimal('0')), Decimal('0')))
+        types = MoneyTypes.load()
+        lines = {}
+        raw_lines = request.data.get('money_amounts')
+        for code, value in (raw_lines.items() if isinstance(raw_lines, dict) else ()):
+            money_type = types.by_code.get(str(code).strip().upper())
+            try:
+                amount = parse_amount(value)
+            except ValueError:
+                amount = None
+            if money_type is not None and not money_type.column and amount:
+                lines[money_type.pk] = amount
+        tx._money_types, tx._line_amounts = types, lines
+        tx.balance = tx.total_revenue - tx.total_expense  # what save() would store
 
         def text(value):
             return None if value is None else str(value)
@@ -175,6 +195,8 @@ class TransactionViewSet(HistoryMixin, PortScopedQuerysetMixin, viewsets.ModelVi
             'currency': currency,
             'date': str(day),
             'customer_payment_afn': text((tx.customer_payment * tx.rate_to_afn).quantize(Decimal('0.01'))),
+            'total_revenue_afn': text(tx.total_revenue_afn),
+            'total_revenue_usd': text(tx.total_revenue_usd),
             'total_expense_afn': text(tx.total_expense_afn),
             'profit_or_loss_afn': text(tx.profit_or_loss_afn),
             'fee_per_dollar_afn': text(tx.fee_per_dollar_afn),

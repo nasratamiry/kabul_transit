@@ -13,7 +13,8 @@ from simple_history.admin import SimpleHistoryAdmin
 from kabulcargo_backend.forms import DigitNormalizingModelForm
 from kabulcargo_backend.utils import dual_date
 
-from .models import ExchangeRate, Hawala, OfficeExpense, StatementLine, statement_source_choices
+from .models import (ExchangeRate, Hawala, OfficeExpense, OfficeIncome, OfficeIncomeCategory, StatementLine,
+                     statement_source_choices)
 from .utils import TodayRateMissing, get_todays_usd_rate
 
 
@@ -146,6 +147,53 @@ class OfficeExpenseAdmin(TodayRateRequiredAdminMixin, CreatedByAdminMixin, Simpl
 
 
 # ---------------------------------------------------------------------------
+# OfficeIncome + its categories
+# ---------------------------------------------------------------------------
+class OfficeIncomeForm(DigitNormalizingModelForm):
+    digit_fields = ('date', 'reference_number')
+
+    class Meta:
+        model = OfficeIncome
+        fields = '__all__'
+
+
+@admin.register(OfficeIncome)
+class OfficeIncomeAdmin(TodayRateRequiredAdminMixin, CreatedByAdminMixin, SimpleHistoryAdmin):
+    form = OfficeIncomeForm
+    list_display = ('date_display', 'branch', 'category', 'amount', 'currency', 'person', 'reference_number',
+                    'rate_used')
+    list_filter = ('branch', 'category', 'currency', ('date', JDateFieldListFilter))
+    search_fields = ('person', 'reference_number', 'note')
+    list_select_related = ('branch', 'category')
+    autocomplete_fields = ('branch',)
+    readonly_fields = ('rate_used', 'amount_afn_display', 'created_by', 'created_display', 'updated_display')
+    fieldsets = (
+        ('عاید', {'fields': ('branch', 'date', 'category', 'amount', 'currency')}),
+        ('جزئیات', {'fields': ('person', 'reference_number', 'note')}),
+        ('محاسبهٔ خودکار', {'fields': ('rate_used', 'amount_afn_display')}),
+        ('زمان', {'fields': ('created_by', 'created_display', 'updated_display')}),
+    )
+
+    @admin.display(description='معادل افغانی')
+    def amount_afn_display(self, obj):
+        val = obj.amount_afn
+        return f'{val:,.2f} AFN' if val is not None else '— (نرخ آن روز موجود نیست)'
+
+
+@admin.register(OfficeIncomeCategory)
+class OfficeIncomeCategoryAdmin(SimpleHistoryAdmin):
+    list_display = ('name_fa', 'code', 'name_ps', 'name_en', 'sort_order', 'is_active')
+    list_editable = ('sort_order', 'is_active')
+    list_filter = ('is_active',)
+    search_fields = ('code', 'name_fa', 'name_ps', 'name_en')
+    ordering = ('sort_order', 'code')
+    fields = ('code', 'name_fa', 'name_ps', 'name_en', 'sort_order', 'is_active')
+
+    def get_readonly_fields(self, request, obj=None):
+        return ('code',) if obj else ()
+
+
+# ---------------------------------------------------------------------------
 # StatementLine (income statement) — super admin only
 # ---------------------------------------------------------------------------
 class StatementLineForm(forms.ModelForm):
@@ -168,7 +216,8 @@ class StatementLineAdmin(SimpleHistoryAdmin):
     fieldsets = (
         ('سطر', {'fields': ('section', 'code', 'label_fa', 'label_en')}),
         ('مبلغ', {'fields': ('source_field',),
-                  'description': 'عاید فقط «پرداخت مشتری» است؛ همه منابع دیگر مصرف هستند.'}),
+                  'description': 'هر مبلغ فقط وقتی عاید است که نوع آن «عاید» باشد (پرداخت مشتری همیشه عاید است). '
+                                 'عواید دفتر فقط در بخش «سایر عواید» می‌آید.'}),
         ('نمایش', {'fields': ('sort_order', 'is_active')}),
     )
 

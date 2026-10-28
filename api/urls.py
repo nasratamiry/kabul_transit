@@ -2,7 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from api.views import accounts, auth, config, finance, health, operations, partners, reports
+from api.views import accounts, auth, config, finance, health, money, operations, partners, reports
 
 router = DefaultRouter()
 router.register('branches', accounts.BranchViewSet, basename='branch')
@@ -17,6 +17,10 @@ router.register('document-requirements', operations.DocumentRequirementViewSet,
 router.register('exchange-rates', finance.ExchangeRateViewSet, basename='exchange-rate')
 router.register('hawala', finance.HawalaViewSet, basename='hawala')
 router.register('office-expenses', finance.OfficeExpenseViewSet, basename='office-expense')
+router.register('office-incomes', finance.OfficeIncomeViewSet, basename='office-income')
+router.register('office-income-categories', finance.OfficeIncomeCategoryViewSet,
+                basename='office-income-category')
+router.register('money-types', money.MoneyFieldTypeViewSet, basename='money-type')
 router.register('field-configs', config.FieldConfigViewSet, basename='field-config')
 router.register('statement-lines', reports.StatementLineViewSet, basename='statement-line')
 

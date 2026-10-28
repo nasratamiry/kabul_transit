@@ -79,3 +79,21 @@ class KabulModelSerializer(serializers.ModelSerializer):
             if name not in many_to_many:
                 attrs[name] = getattr(instance, name)
         return attrs
+
+
+def free_code(model, name, fallback):
+    """
+    A code for a new admin-managed row when none was typed: the English name in A-Z0-9_
+    (else `fallback`), cut to the field's length and made unique with a number.
+    """
+    import re
+    max_length = model._meta.get_field('code').max_length
+    base = re.sub(r'[^A-Z0-9]+', '_', name.upper()).strip('_')
+    if not base or not base[0].isalpha():
+        base = fallback
+    base = base[:max_length]
+    candidate, n = base, 2
+    while model.objects.filter(code=candidate).exists():
+        suffix = f'_{n}'
+        candidate, n = base[:max_length - len(suffix)] + suffix, n + 1
+    return candidate

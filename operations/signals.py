@@ -1,8 +1,16 @@
 from django.db import transaction
-from django.db.models.signals import post_delete
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
-from .models import Document
+from .models import Document, TransactionMoneyLine, refresh_balance
+
+
+@receiver(post_save, sender=TransactionMoneyLine)
+@receiver(post_delete, sender=TransactionMoneyLine)
+def keep_balance_current(sender, instance, raw=False, **kwargs):
+    """A changed money line changes its transaction's revenue or expenses, so its stored balance too."""
+    if not raw:
+        refresh_balance(instance.transaction_id)
 
 
 @receiver(post_delete, sender=Document)

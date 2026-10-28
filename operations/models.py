@@ -3,7 +3,7 @@ from decimal import Decimal
 import jdatetime
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator
+from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
 from django.utils import timezone
 from django_jalali.db import models as jmodels
@@ -11,6 +11,7 @@ from simple_history.models import HistoricalRecords
 
 from kabulcargo_backend.utils import normalize_digits
 
+from .money import BUILTIN_KIND, LINE_PREFIX, LOCKED_CODE, MoneyTypes, transaction_totals
 from .validators import validate_file_extension, validate_file_magic, validate_file_size
 
 TWO_PLACES = Decimal('0.01')
@@ -27,7 +28,8 @@ def kabul_today():
 class Transaction(models.Model):
     """
     One truck / one registration. All four trade types live in this model.
-    The ONLY revenue is customer_payment; every other money field is an expense.
+    Whether an amount is revenue or expense is decided by its MoneyFieldType (operations/money.py):
+    customer_payment is always revenue; the super admin classifies every other type.
     """
 
     class TradeType(models.TextChoices):
@@ -48,14 +50,10 @@ class Transaction(models.Model):
         EUR = 'EUR', 'یورو (EUR)'
         IRR = 'IRR', 'تومان / ریال ایرانی (IRR)'
 
-    # Every field deducted from customer_payment. Order = order shown in the admin.
-    EXPENSE_FIELDS = (
-        'khak_puli_cash', 'khak_puli_bank',
-        'revenue_estras', 'revenue_transport', 't2_delivery_expense',
-        'transit_right', 'tariff_expense',
-        'expense_labor', 'demurrage_internal', 'demurrage_truck',
-        'seal_expense', 'scale_ticket_expense', 'gate_ticket_expense',
-    )
+    # The built-in money columns (one MoneyFieldType each). Which are revenue and which expense
+    # is not fixed here: MoneyFieldType.kind decides. Types added later keep their amounts in
+    # TransactionMoneyLine.
+    MONEY_COLUMNS = tuple(BUILTIN_KIND)
 
     # --- Meta / common ------------------------------------------------------
     branch = models.ForeignKey('accounts.Branch', verbose_name='بندر / شعبه', on_delete=models.PROTECT,
@@ -98,8 +96,8 @@ class Transaction(models.Model):
     scale_ticket_number = models.CharField('نمبر تکت ترازو', max_length=60, blank=True)
     seal_number = models.CharField('نمبر سیم / سرب', max_length=60, blank=True)
 
-    # --- Finance: the ONLY revenue -----------------------------------------
-    customer_payment = money_field('پرداخت مشتری', help_text='یگانه عاید: پولی که مشتری برای این موتر می‌پردازد')
+    # --- Finance: customer_payment is always revenue ------------------------
+    customer_payment = money_field('پرداخت مشتری', help_text='پولی که مشتری برای این موتر می‌پردازد؛ همیشه عاید است')
 
     # --- Currency & rate ----------------------------------------------------
     currency = models.CharField('نوع ارز', max_length=3, choices=Currency.choices, default=Currency.USD)
@@ -107,11 +105,14 @@ class Transaction(models.Model):
     exchange_rate = models.DecimalField('نرخ اسعار', max_digits=14, decimal_places=8, default=1,
                                         help_text='یک واحد این ارز چند افغانی است (برای افغانی همیشه ۱)')
 
-    # --- Expenses (all deducted from the balance) ---------------------------
+    # --- The other built-in amounts (expenses unless the super admin says otherwise) ---
     khak_puli_cash = money_field('خاک‌پولی نقدی')
     khak_puli_bank = money_field('خاک‌پولی تحویلی بانک')
-    revenue_estras = money_field('عواید استراس', help_text='با وجود نام «عواید»، این یک مصرف است')
-    revenue_transport = money_field('عواید ترانسپورت', help_text='با وجود نام «عواید»، این یک مصرف است')
+    # Shown as «عواید بندر والی»; the column keeps its old technical name.
+    revenue_estras = money_field('عواید بندر والی',
+                                 help_text='با وجود نام «عواید»، مصرف است (مگر سوپر ادمین نوع آن را عاید کند)')
+    revenue_transport = money_field('عواید ترانسپورت',
+                                    help_text='با وجود نام «عواید»، مصرف است (مگر سوپر ادمین نوع آن را عاید کند)')
     t2_delivery_expense = money_field('تحویلی T2')
     transit_right = money_field('حق‌العبور')
     tariff_expense = money_field('مصارف تعرفه')
@@ -127,7 +128,7 @@ class Transaction(models.Model):
 
     # --- Stored result ------------------------------------------------------
     balance = money_field('بیلانس', editable=False,
-                          help_text='پرداخت مشتری منهای همه مصارف، به ارز همین معامله')
+                          help_text='جملهٔ عواید منهای جملهٔ مصارف، به ارز همین معامله')
 
     history = HistoricalRecords(verbose_name='تاریخچهٔ معامله', excluded_fields=['updated_at'])
 
@@ -153,21 +154,61 @@ class Transaction(models.Model):
     def save(self, *args, **kwargs):
         if self.currency == self.Currency.AFN:
             self.exchange_rate = Decimal('1')
-        self.balance = self.customer_payment - self.total_expense
+        revenue, expense = transaction_totals(self)
+        self.balance = revenue - expense
         update_fields = kwargs.get('update_fields')
         if update_fields is not None:
             kwargs['update_fields'] = {*update_fields, 'balance', 'exchange_rate'}
         super().save(*args, **kwargs)
 
+    # --- Money types and lines ---------------------------------------------
+    def money_types(self):
+        """The revenue / expense registry (lists attach one for all rows: operations.money.attach_money)."""
+        if not hasattr(self, '_money_types'):
+            self._money_types = MoneyTypes.load()
+        return self._money_types
+
+    def line_amounts(self):
+        """{MoneyFieldType id: amount} of the added types. An unsaved form sets _line_amounts itself."""
+        if not hasattr(self, '_line_amounts'):
+            self._line_amounts = dict(self.money_lines.values_list('field_type_id', 'amount')) if self.pk else {}
+        return self._line_amounts
+
+    def forget_money(self):
+        """Drop the cached registry and lines (after the lines were changed)."""
+        for name in ('_money_types', '_line_amounts'):
+            self.__dict__.pop(name, None)
+
+    def money_items(self):
+        """Every non-zero amount (columns and lines) in form order, customer_payment always: [(type, amount)]."""
+        lines = self.line_amounts()
+        items = []
+        for money_type in self.money_types().types:
+            amount = (Decimal(getattr(self, money_type.column) or 0) if money_type.column
+                      else Decimal(lines.get(money_type.pk, 0)))
+            if amount or money_type.code == LOCKED_CODE:
+                items.append((money_type, amount))
+        return items
+
     # --- Row summary (computed, read-only) ----------------------------------
     @property
+    def total_revenue(self):
+        """Sum of all revenue (customer_payment + every REVENUE type) in this record's own currency."""
+        return transaction_totals(self)[0]
+
+    @property
     def total_expense(self):
-        """Sum of all expenses in this record's own currency."""
-        return sum((Decimal(getattr(self, name) or 0) for name in self.EXPENSE_FIELDS), Decimal('0'))
+        """Sum of all expenses (every EXPENSE type) in this record's own currency."""
+        return transaction_totals(self)[1]
 
     @property
     def rate_to_afn(self):
         return Decimal('1') if self.currency == self.Currency.AFN else Decimal(self.exchange_rate)
+
+    @property
+    def total_revenue_afn(self):
+        """جمله عواید افغانی"""
+        return (self.total_revenue * self.rate_to_afn).quantize(TWO_PLACES)
 
     @property
     def total_expense_afn(self):
@@ -192,6 +233,12 @@ class Transaction(models.Model):
         return self._usd_rate
 
     @property
+    def total_revenue_usd(self):
+        """جمله عواید دالر"""
+        rate = self.fee_per_dollar_afn
+        return (self.total_revenue_afn / rate).quantize(TWO_PLACES) if rate else None
+
+    @property
     def total_expense_usd(self):
         """جمله مصرف دالر"""
         rate = self.fee_per_dollar_afn
@@ -207,6 +254,136 @@ class Transaction(models.Model):
         """مفاد یا ضرر (دالر)"""
         rate = self.fee_per_dollar_afn
         return (self.profit_or_loss_afn / rate).quantize(TWO_PLACES) if rate else None
+
+
+def refresh_balance(transaction_id):
+    """Recompute a stored balance after its money lines changed (no history row: balance is derived)."""
+    tx = Transaction.objects.filter(pk=transaction_id).first()
+    if tx is not None:
+        revenue, expense = transaction_totals(tx)
+        Transaction.objects.filter(pk=tx.pk).update(balance=revenue - expense)
+
+
+class MoneyFieldType(models.Model):
+    """
+    One kind of money a transaction can hold: the 14 built-in columns (customer_payment and
+    the 13 original amounts) and every type the super admin adds later (amounts kept in
+    TransactionMoneyLine). `kind` alone decides whether an amount is revenue or expense.
+    """
+
+    class Kind(models.TextChoices):
+        REVENUE = 'REVENUE', 'عاید'
+        EXPENSE = 'EXPENSE', 'مصرف'
+
+    class Section(models.TextChoices):
+        REVENUE = 'REVENUE', 'عاید'
+        COGS = 'COGS', 'هزینهٔ مستقیم خدمات'
+        OPEX = 'OPEX', 'مصارف عملیاتی'
+        OTHER = 'OTHER', 'سایر مصارف'
+
+    EXPENSE_SECTIONS = (Section.COGS, Section.OPEX, Section.OTHER)
+
+    code = models.CharField('کود', max_length=26, unique=True,
+                            validators=[RegexValidator(r'^[A-Z][A-Z0-9_]*$',
+                                                       'کود فقط حروف بزرگ انگلیسی، عدد و _ باشد (مثلاً SERVICE_FEE).')],
+                            help_text='کود انگلیسی کوتاه با حروف بزرگ. بعد از ثبت تغییر نمی‌کند.')
+    column = models.CharField('ستون معامله', max_length=40, blank=True, editable=False,
+                              help_text='فقط برای انواع داخلی سیستم: نام ستون مبلغ در جدول معامله')
+    name_fa = models.CharField('نام (دری)', max_length=100)
+    name_ps = models.CharField('نام (پشتو)', max_length=100, blank=True)
+    name_en = models.CharField('نام (انگلیسی)', max_length=100, blank=True)
+    kind = models.CharField('نوع', max_length=10, choices=Kind.choices,
+                            help_text='عاید به بیلانس اضافه می‌شود؛ مصرف از آن کم می‌شود')
+    section = models.CharField('بخش صورت حساب', max_length=10, choices=Section.choices,
+                               help_text='برای عاید همیشه «عاید»؛ برای مصرف یکی از سه بخش مصارف')
+    sort_order = models.PositiveIntegerField('ترتیب نمایش', default=100, help_text='عدد کمتر = بالاتر در فورم')
+    is_active = models.BooleanField('فعال', default=True,
+                                    help_text='نوع غیرفعال در فورم نمی‌آید؛ مبالغ قبلی در گزارش‌ها می‌مانند')
+    is_builtin = models.BooleanField('داخلی سیستم', default=False, editable=False)
+
+    history = HistoricalRecords(verbose_name='تاریخچهٔ نوع عاید / مصرف')
+
+    class Meta:
+        verbose_name = 'نوع عاید / مصرف'
+        verbose_name_plural = 'انواع عاید و مصرف'
+        ordering = ['sort_order', 'code']
+
+    def __str__(self):
+        return f'{self.name_fa} ({self.get_kind_display()})'
+
+    @property
+    def source(self):
+        """Key of this type in form-config, statement lines and drill-downs: the column, or '@money:<code>'."""
+        return self.column or f'{LINE_PREFIX}{self.code}'
+
+    @property
+    def locked(self):
+        return self.code == LOCKED_CODE
+
+    def names(self):
+        return {'fa': self.name_fa, 'ps': self.name_ps or self.name_fa, 'en': self.name_en or self.name_fa}
+
+    def amounts_count(self):
+        """How many transactions hold a non-zero amount of this type (anywhere, every branch)."""
+        if self.column:
+            return Transaction.objects.exclude(**{self.column: 0}).count()
+        if not self.pk:
+            return 0
+        return self.lines.exclude(amount=0).count()
+
+    def clean(self):
+        self.code = (self.code or '').strip().upper()
+        if self.kind == self.Kind.REVENUE:
+            self.section = self.Section.REVENUE
+        elif self.section not in self.EXPENSE_SECTIONS:
+            raise ValidationError({'section': 'برای مصرف یکی از بخش‌های «هزینهٔ مستقیم خدمات»، «مصارف عملیاتی» '
+                                              'یا «سایر مصارف» را انتخاب کنید.'})
+        old = type(self).objects.filter(pk=self.pk).first() if self.pk else None
+        if old is not None and old.code != self.code:
+            raise ValidationError({'code': 'کود بعد از ثبت تغییر کرده نمی‌تواند.'})
+        if (old.locked if old else self.locked) and (self.kind != self.Kind.REVENUE or not self.is_active):
+            raise ValidationError({'kind': '«پرداخت مشتری» همیشه عاید و فعال است و تغییر کرده نمی‌تواند.'})
+        if old is not None and old.kind != self.kind:
+            used = self.amounts_count()
+            if used:
+                raise ValidationError(
+                    {'kind': f'نوع «{self.name_fa}» را تغییر داده نمی‌توانید، چون {used} معامله مبلغ آن را دارد. '
+                             'نوع فقط تا وقتی تغییر می‌کند که هیچ مبلغی ثبت نشده باشد.'},
+                    code='has_amounts')
+
+    def save(self, *args, **kwargs):
+        # The signals (statement line, form rows) compare with what was there before.
+        self._before = (type(self).objects.filter(pk=self.pk).values('name_fa', 'name_en', 'kind', 'section')
+                        .first() if self.pk else None)
+        super().save(*args, **kwargs)
+
+
+class TransactionMoneyLine(models.Model):
+    """The amount of one added MoneyFieldType on one transaction (its own currency and rate)."""
+
+    transaction = models.ForeignKey(Transaction, verbose_name='معامله', on_delete=models.CASCADE,
+                                    related_name='money_lines')
+    field_type = models.ForeignKey(MoneyFieldType, verbose_name='نوع عاید / مصرف', on_delete=models.PROTECT,
+                                   related_name='lines')
+    amount = money_field('مبلغ', validators=[MinValueValidator(0)], help_text='به ارز و نرخ همین معامله')
+    note = models.CharField('یادداشت', max_length=200, blank=True)
+
+    history = HistoricalRecords(verbose_name='تاریخچهٔ مبلغ معامله')
+
+    class Meta:
+        verbose_name = 'مبلغ عاید / مصرف معامله'
+        verbose_name_plural = 'مبالغ عاید / مصرف معاملات'
+        unique_together = ('transaction', 'field_type')
+        ordering = ['field_type__sort_order', 'field_type__code']
+
+    def __str__(self):
+        return f'{self.field_type.name_fa}: {self.amount}'
+
+    def clean(self):
+        if self.amount is not None and self.amount < 0:
+            raise ValidationError({'amount': 'مبلغ نمی‌تواند منفی باشد.'})
+        if self.field_type_id and self.field_type.column:
+            raise ValidationError({'field_type': 'این نوع ستون خودش را در معامله دارد.'})
 
 
 # Transaction fields that hold a document's number; a DocumentType may point at one of them.

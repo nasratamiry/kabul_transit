@@ -255,8 +255,9 @@ try:
               f'status={response.status_code}, data={response.data if response.status_code != 201 else ""}')
 
         summary = response.data.get('row_summary', {}) if response.status_code == 201 else {}
-        check('row_summary: مصرف ۲۱۱۵۰ افغانی / ۳۰۰ دالر، مفاد ۴۹۳۵۰ افغانی / ۷۰۰ دالر',
-              summary == {'total_expense_afn': '21150.00', 'fee_per_dollar_afn': '70.50000000',
+        check('row_summary: عاید ۷۰۵۰۰ / ۱۰۰۰ دالر، مصرف ۲۱۱۵۰ افغانی / ۳۰۰ دالر، مفاد ۴۹۳۵۰ افغانی / ۷۰۰ دالر',
+              summary == {'total_revenue_afn': '70500.00', 'total_revenue_usd': '1000.00',
+                          'total_expense_afn': '21150.00', 'fee_per_dollar_afn': '70.50000000',
                           'total_expense_usd': '300.00', 'profit_or_loss_afn': '49350.00',
                           'profit_or_loss_usd': '700.00'}, str(summary))
 
