@@ -10,6 +10,7 @@ from .base import KabulModelSerializer
 
 class FieldConfigSerializer(KabulModelSerializer):
     locked = serializers.SerializerMethodField(label='قفل')
+    money = serializers.SerializerMethodField(label='نوع عاید / مصرف')
 
     class Meta:
         model = FieldConfig
@@ -17,6 +18,14 @@ class FieldConfigSerializer(KabulModelSerializer):
 
     def get_locked(self, obj):
         return obj.field_name in LOCKED_FIELDS
+
+    def get_money(self, obj):
+        """Revenue / expense rows: what the form needs to place them (as form-config gives it), else None."""
+        t = obj.money_type
+        if t is None:
+            return None
+        return {'code': t.code, 'source': t.source, 'kind': t.kind, 'section': t.section, 'names': t.names(),
+                'sort_order': t.sort_order, 'is_active': t.is_active}
 
 
 class _DigitsIntegerField(serializers.IntegerField):

@@ -56,7 +56,7 @@ class FieldConfigViewSet(HistoryMixin, viewsets.ModelViewSet):
     Revenue / expense rows (money_type set) are managed on the «عواید و مصارف» page
     (/api/money-types/): bulk/ refuses them, copy/ and reset/ leave them alone.
     """
-    queryset = FieldConfig.objects.select_related('branch')
+    queryset = FieldConfig.objects.select_related('branch', 'money_type')
     serializer_class = FieldConfigSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['branch', 'trade_type', 'visibility']

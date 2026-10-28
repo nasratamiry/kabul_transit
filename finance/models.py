@@ -360,9 +360,10 @@ class StatementLine(models.Model):
             raise ValidationError({'section': 'این منبع عاید است و فقط در بخش عاید می‌آید.'})
         if kind == 'OFFICE_INCOME' and self.section != self.Section.OTHER_INCOME:
             raise ValidationError({'section': 'عواید دفتر فقط در بخش «سایر عواید» می‌آید.'})
-        if kind == 'EXPENSE' and self.section in (self.Section.REVENUE, self.Section.OTHER_INCOME):
-            raise ValidationError({'source_field': 'این منبع مصرف است؛ بخش عاید و «سایر عواید» فقط عایدها را '
-                                                   'قبول می‌کند.'})
+        if kind == 'EXPENSE' and self.section == self.Section.REVENUE:
+            raise ValidationError({'source_field': 'بخش عاید فقط انواع «عاید» را قبول می‌کند؛ این منبع مصرف است.'})
+        if kind == 'EXPENSE' and self.section == self.Section.OTHER_INCOME:
+            raise ValidationError({'source_field': 'بخش «سایر عواید» فقط عواید دفتر را قبول می‌کند؛ این منبع مصرف است.'})
         # One active line per source, or the amount would be counted twice.
         if self.is_active and self.source_field:
             duplicate = (StatementLine.objects.filter(source_field=self.source_field, is_active=True)
