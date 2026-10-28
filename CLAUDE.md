@@ -17,9 +17,11 @@
   هم کارهای مالی. **نقش جداگانهٔ کارمند اسناد وجود ندارد.**
 - یک سوپر ادمین در کابل بر همهٔ شعبات نظارت می‌کند: مفاد و ضرر، مدیریت کاربران،
   تنظیم فیلدها، و بک‌اپ.
-- **تنها منبع درآمد = پرداخت مشتری.** هیچ چیز دیگر درآمد حساب نمی‌شود. تمام
-  موارد دیگر (خاک‌پولی، استراس، ترانسپورت، T2، سیم، تکت‌ها، جوالی، توقف،
-  تعرفه، حق‌العبور و ...) **مصرف** هستند.
+- **یک مبلغ فقط وقتی عاید است که نوع آن (MoneyFieldType) «عاید» باشد.**
+  `customer_payment` همیشه عاید و قفل است. سوپر ادمین نوع هر مبلغ دیگر را تعیین
+  می‌کند (مدیریت ← عواید و مصارف). ۱۳ ستون داخلی (خاک‌پولی، بندر والی، ترانسپورت،
+  T2، سیم، تکت‌ها، جوالی، توقف، تعرفه، حق‌العبور) **مصرف** seed شده‌اند.
+  دفترها عواید خودشان را هم دارند (OfficeIncome → «سایر عواید» گزارش).
 
 ## استک فنی (بدون پرسیدن تغییر نده)
 - Python 3.12 + Django 5 (آخرین نسخهٔ پایدار)
@@ -53,15 +55,21 @@
 
 **هرگز** نقش `doc_clerk` یا `port_officer` نساز.
 
-## قانون درآمد (محدودیت سخت)
-تنها فیلد درآمدی روی Transaction = `customer_payment` (پولی که مشتری برای آن
-موتر می‌دهد). می‌تواند به هر ارزی باشد. سیستم با نرخ روز USD↔AFN تبدیل می‌کند.
-بقیهٔ همه‌چیز مصرف است.
+## قانون درآمد (محدودیت سخت) — از ۱۴۰۵/۰۸/۰۶ (2026-10-28)
+یک مبلغ فقط وقتی عاید است که نوع آن «عاید» (`MoneyFieldType.kind = REVENUE`) باشد.
+`customer_payment` همیشه عاید، فعال و لازم است و هرگز تغییر نمی‌کند. هر نوع دیگر
+(۱۳ ستون داخلی + انواعی که سوپر ادمین اضافه می‌کند، در `TransactionMoneyLine`) عاید
+یا مصرف است، همان‌طور که سوپر ادمین تعیین کرده. تغییر kind فقط وقتی مجاز است که هیچ
+معامله‌ای مبلغ آن نوع را نداشته باشد (ورنه 409). همهٔ مبالغ به ارز و نرخ همان معامله.
 
-فرمول نهایی بلانس:
+فرمول نهایی بلانس (یک تابع: `operations/money.py` → `transaction_totals`):
 ```
-balance_afn = customer_payment_afn − مجموع تمام مصارف به افغانی
+total_revenue  = ستون‌های REVENUE + سطرهای REVENUE
+total_expenses = ستون‌های EXPENSE + سطرهای EXPENSE
+balance        = total_revenue − total_expenses
 ```
+گزارش عاید: Revenue − COGS = ناخالص؛ − OPEX − سایر مصارف + سایر عواید (OfficeIncome) = خالص.
+هر جمع (بیلانس، row_summary، preview، فهرست، جزئیات، چاپ، داشبورد، Excel، گزارش) از همین قانون.
 
 ## چهار نوع تجارت
 Export / Import / Transit / TIR Carnet. هر کدام صفحهٔ جدا در UI دارد اما همه
@@ -77,9 +85,9 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
 کند. نرخ‌های تاریخ گذشته قابل اضافه‌کردن است؛ تاریخ آینده رد می‌شود.
 
 ## قوانین سادگی
-- سیستم باید **قوی اما ساده** باشد. بدون تفکیک کارمند اسناد از مالی. بدون
-  چند فیلد درآمد که کاربر را گیج کند. یک فیلد `customer_payment` و فیلدهای
-  مصرف روشن.
+- سیستم باید **قوی اما ساده** باشد. بدون تفکیک کارمند اسناد از مالی. فورم
+  معامله دو بخش روشن دارد: «عواید» (اول `customer_payment`) و «مصارف»؛ هر نوع
+  بر اساس kind خودش در یکی از این دو می‌آید.
 - **اعداد:** هم دری/عربی (۰-۹ / ٠-٩) و هم انگلیسی (0-9) را قبول کن.
   قبل از پارس Decimal، به انگلیسی نرمال کن.
 - **تاریخ:** همه‌جا شمسی و میلادی هر دو را نشان بده. در picker کاربر هر کدام
@@ -191,7 +199,7 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
   - `lib/transactionSections.ts` منبع واحد نوع و بخش ۴۳ فیلد؛ form-config فقط نمایش/لازم/ترتیب را تعیین می‌کند.
   - `POST /api/transactions/preview-summary/` خلاصهٔ ردیف فورم ذخیره‌نشده (از propertyهای خود مدل).
   - فهرست معاملات (فقط همین) pagination دارد: `{count, next, previous, results}`، ۲۵ تایی.
-  - «عواید استراس/ترانسپورت» در UI هم مصرف حساب می‌شوند (قانون یگانه عاید).
+  - «عواید بندر والی/ترانسپورت» مصرف‌اند (kind = EXPENSE؛ قانون عاید/مصرف را ببینید).
   - آزمایش: `cleanup-stage12a.py --setup` → `verify-stage12a.mjs` (۳۴ تست) → `cleanup-stage12a.py`.
     همهٔ cleanup ها حالا تاریخچهٔ دادهٔ آزمایشی را هم پاک می‌کنند (`scripts/e2e_history.py`).
 - [x] مرحلهٔ ۱۲ب: جزئیات معامله، اسناد، معادل دالری، ثبت نرخ امروز توسط مدیر بندر
@@ -261,6 +269,16 @@ API باید HTTP 428 با کود `TODAY_RATE_MISSING` برگرداند. فرا�
   - گزارش‌های مرحله فقط در `_local/` (git-ignored)؛ خلاصه در `docs/PROJECT_HISTORY.md`. `.claude/` و `.cursor/` در Git نیستند.
   - fixtureهای E2E با `settings_production` اجرا نمی‌شوند (`e2e_history.py`). `verify_kabul_day.py` در run_all_checks.
   - stack test: `scripts/prod_stack_test.sh` (لینوکس) / GitHub Actions «Production stack test» (دستی).
+- [x] عواید و مصارف قابل مدیریت + عواید دفتر (`/admin/money-settings`، `/finance/office-income`)
+  - `MoneyFieldType` (operations؛ ۱۴ نوع داخلی با `column`)، `TransactionMoneyLine` (انواع تازه، API:
+    `money_amounts {code: amount}`؛ خواندن: `money_items`)، `OfficeIncome` + `OfficeIncomeCategory` (finance).
+  - کلید انواع تازه همه‌جا `@money:<CODE>` (FieldConfig.field_name، StatementLine.source_field، `?nonzero=`)؛
+    کتگوری عواید دفتر `@office_income:<CODE>` (بخش `OTHER_INCOME`). سطر گزارش و ردیف‌های فورم با signal.
+  - ردیف‌های پولی FieldConfig (`money_type` پر) فقط در صفحهٔ «عواید و مصارف»؛ field-configs bulk ردشان می‌کند،
+    copy/reset به آن‌ها دست نمی‌زنند. ترتیب فیلدهای پولی = `MoneyFieldType.sort_order` (برای همهٔ بندرها).
+  - «لازم» برای انواع تازه در API هم اجرا می‌شود (ستون‌های داخلی مثل قبل فقط در فورم).
+  - «استراس» → «بندر والی» فقط برچسب؛ ستون `revenue_estras` همان است.
+  - آزمایش: `verify_money_types.py` (۵۹) + `cleanup-money-admin.py --setup` → `verify-money-admin.mjs` (۲۰) → cleanup.
 - [ ] فاز دوم: Transaction، FieldConfig، نرخ، فرانت (بعد از رسیدن اکسل جدید)
 
 ## graphify
