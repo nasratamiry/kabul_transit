@@ -192,7 +192,7 @@ await step(4, 'Money table: each line in AFN + USD; profit USD at the date rate'
       profitAfn.includes('۵٬۴۰۰') &&
       cls.includes('emerald') &&
       table.includes('۶۰٫۰۰') &&
-      table.includes('یگانه عاید'),
+      table.includes('جملهٔ عواید'),
     `${tariffUsd} | ${profitUsd} | ${profitAfn}`,
   );
 });

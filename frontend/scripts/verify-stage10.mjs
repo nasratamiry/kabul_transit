@@ -496,7 +496,7 @@ await step(21, 'Delete rate → confirm → removed', async () => {
 // ============================ Statement lines ============================
 let office = null;
 let seal = null;
-await step(22, 'Grouped by section, 17 default lines', async () => {
+await step(22, 'Grouped by section (5 with «سایر عواید»), every line shown', async () => {
   await page.goto(`${BASE}/admin/statement-lines`);
   await row('OPEX_OFFICE').waitFor();
   const sections = await page.locator('[data-testid^=section-]').count();
@@ -504,10 +504,14 @@ await step(22, 'Grouped by section, 17 default lines', async () => {
   const lines = (await api('GET', '/statement-lines/')).data;
   office = lines.find((l) => l.code === 'OPEX_OFFICE');
   seal = lines.find((l) => l.code === 'COGS_SEAL');
+  // 17 standard lines + one «سایر عواید» line per office-income category (+ added types).
   check(
     22,
-    'Grouped by section, 17 default lines',
-    sections === 4 && rows === 17,
+    'Grouped by section (5 with «سایر عواید»), every line shown',
+    sections === 5 &&
+      rows === lines.length &&
+      rows >= 22 &&
+      lines.filter((l) => l.section === 'OTHER_INCOME').length >= 5,
     `sections=${sections}, rows=${rows}`,
   );
   await page.screenshot({ path: `${SHOTS}/06-statement-lines.png`, fullPage: true });
@@ -531,7 +535,7 @@ await step(23, 'Inline edit label_fa saves on blur', async () => {
 
 await step(
   24,
-  'REVENUE with non-customer_payment source → Dari error (UI + backend 400)',
+  'REVENUE section with an expense source → Dari error (UI + backend 400)',
   async () => {
     await row('COGS_SEAL').getByRole('button', { name: 'ویرایش' }).click();
     await page.waitForURL(/statement-lines\/\d+\/edit$/);
@@ -543,7 +547,7 @@ await step(
     const r = await api('PATCH', `/statement-lines/${seal.id}/`, { section: 'REVENUE' });
     check(
       24,
-      'REVENUE with non-customer_payment source → Dari error (UI + backend 400)',
+      'REVENUE section with an expense source → Dari error (UI + backend 400)',
       r.status === 400 && JSON.stringify(r.data).includes('بخش عاید فقط'),
       `api=${r.status} ${JSON.stringify(r.data)}`,
     );
@@ -597,10 +601,13 @@ await step(32, 'Dashboard: super_admin tiles + rate card', async () => {
   const rate = await page.textContent('[data-testid=tile-rate-value]');
   const lines = await page.textContent('[data-testid=tile-lines-value]');
   const banner = await page.getAttribute('[data-testid=today-rate-banner]', 'data-state');
+  // Active lines: the 17 standard ones + one «سایر عواید» line per office-income category.
+  const active = (await api('GET', '/statement-lines/')).data.filter((l) => l.is_active).length;
+  const dari = String(active).replace(/\d/g, (x) => '۰۱۲۳۴۵۶۷۸۹'[Number(x)]);
   check(
     32,
     'Dashboard: super_admin tiles + rate card',
-    rate === 'ثبت شده' && lines === '۱۷' && banner === 'set',
+    rate === 'ثبت شده' && lines === dari && active >= 22 && banner === 'set',
     `rate=${rate}, lines=${lines}`,
   );
   await page.screenshot({ path: `${SHOTS}/08-dashboard-admin.png` });

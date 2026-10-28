@@ -61,6 +61,7 @@ E2E_STAGES = [
     ('e2e-stage14', 'cleanup-stage14.py', ['--setup'], [], 'verify-stage14.mjs', {}),
     ('e2e-documents', 'cleanup-documents.py', ['--setup'], [], 'verify-documents.mjs', {}),
     ('e2e-field-settings', 'cleanup-field-settings.py', ['--setup'], [], 'verify-field-settings.mjs', {}),
+    ('e2e-money-admin', 'cleanup-money-admin.py', ['--setup'], [], 'verify-money-admin.mjs', {}),
     ('e2e-stage9', 'cleanup-stage9.py', ['--setup'], [], 'verify-e2e.mjs',
      {'KC_ADMIN_USER': 'e2e_admin', 'KC_ADMIN_PASS': 'E2e-Stage09-Pass-2026',
       'KC_MANAGER_USER': 'e2e_manager', 'KC_MANAGER_PASS': 'E2e-Stage09-Pass-2026'}),

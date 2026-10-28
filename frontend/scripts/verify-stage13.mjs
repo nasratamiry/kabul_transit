@@ -102,16 +102,16 @@ const hawalaList = async (p, q = period) => (await api(p, 'GET', `/hawala/?${q}`
 const officeList = async (p, q = period) => (await api(p, 'GET', `/office-expenses/?${q}`)).data;
 
 // ================================ navigation ================================
-await step(1, 'Sidebar «مالی» group with both pages — both roles', async () => {
+await step(1, 'Sidebar «مالی» group with its three pages — both roles', async () => {
   const links = async (p) =>
     p.locator('[data-testid=nav-finance] a').evaluateAll((as) => as.map((a) => a.pathname));
   const m = await links(mgr);
   const a = await links(admin);
-  const want = ['/finance/hawala', '/finance/office-expenses'];
+  const want = ['/finance/hawala', '/finance/office-expenses', '/finance/office-income'];
   const heading = await mgr.locator('[data-testid=nav-finance] p').textContent();
   check(
     1,
-    'Sidebar «مالی» group with both pages — both roles',
+    'Sidebar «مالی» group with its three pages — both roles',
     JSON.stringify(m) === JSON.stringify(want) &&
       JSON.stringify(a) === JSON.stringify(want) &&
       heading.includes('مالی'),

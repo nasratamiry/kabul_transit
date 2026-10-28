@@ -304,7 +304,9 @@ await step(10, 'Income statement page (BM): IAS 1 sections, subtotals and net = 
     net.includes(dariMoney(cur.totals.net_profit_afn)) &&
       gross.includes(dariMoney(cur.totals.gross_profit_afn)) &&
       lines === cur.lines.length &&
-      heads.length === 4,
+      // IAS 1 order; office income («سایر عواید») last, before net profit.
+      heads.length === 5 &&
+      heads[4] === 'سایر عواید',
     `net=${net} gross=${gross} lines=${lines} heads=${heads}`,
   );
 });

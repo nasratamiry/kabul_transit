@@ -146,24 +146,29 @@ await step(2, 'Branch manager gets the 403 page', async () => {
   );
 });
 
-await step(3, 'All 43 fields in the 7 form sections; four trade-type tabs', async () => {
-  await openSettings(A);
-  const rows = await admin.locator('[data-testid^=fs-row-]').count();
-  const sections = await admin.locator('[data-testid^=fs-section-]').count();
-  const tabs = await admin.locator('[role=tab]').allTextContents();
-  const mono = await admin.getByTestId('fs-row-goods_type').locator('code').textContent();
-  await admin.screenshot({ path: `${SHOTS}/01-table.png`, fullPage: false });
-  check(
-    3,
-    'All 43 fields in the 7 form sections; four trade-type tabs',
-    rows === 43 &&
-      sections === 7 &&
-      tabs.length === 4 &&
-      tabs.includes(FA.trade_types.TIR_CARNET) &&
-      mono === 'goods_type',
-    `rows=${rows} sections=${sections} tabs=${tabs.join('/')}`,
-  );
-});
+await step(
+  3,
+  'All 29 non-money fields in the 6 form sections (money fields: «عواید و مصارف»); four trade-type tabs',
+  async () => {
+    await openSettings(A);
+    const rows = await admin.locator('[data-testid^=fs-row-]').count();
+    const sections = await admin.locator('[data-testid^=fs-section-]').count();
+    const tabs = await admin.locator('[role=tab]').allTextContents();
+    const mono = await admin.getByTestId('fs-row-goods_type').locator('code').textContent();
+    await admin.screenshot({ path: `${SHOTS}/01-table.png`, fullPage: false });
+    check(
+      3,
+      'All 29 non-money fields in the 6 form sections (money fields: «عواید و مصارف»); four trade-type tabs',
+      // The 14 revenue / expense columns are managed on «عواید و مصارف» (only a link here).
+      rows === 29 &&
+        sections === 6 &&
+        tabs.length === 4 &&
+        tabs.includes(FA.trade_types.TIR_CARNET) &&
+        mono === 'goods_type',
+      `rows=${rows} sections=${sections} tabs=${tabs.join('/')}`,
+    );
+  },
+);
 
 await step(4, 'Locked fields: lock icon, controls disabled, API 400 in Dari', async () => {
   const locks = await admin.locator('[data-testid^=fs-lock-]').count();
@@ -180,7 +185,7 @@ await step(4, 'Locked fields: lock icon, controls disabled, API 400 in Dari', as
   check(
     4,
     'Locked fields: lock icon, controls disabled, API 400 in Dari',
-    locks === 5 &&
+    locks === 4 && // serial, date, currency, rate; customer_payment's lock is on «عواید و مصارف»
       disabled &&
       bar === 0 &&
       title === FA.field_settings.locked &&
@@ -412,10 +417,12 @@ await step(17, 'New branch: its settings exist and the page shows them', async (
     .locator(`[data-testid=fs-branch] option[value="${made.data.id}"]`)
     .count();
   const all = await api(admin, 'GET', `/field-configs/?branch=${made.data.id}`);
+  // 43 fields × 4 trade types, plus one row per trade type for every added money type.
+  const added = (await api(admin, 'GET', '/money-types/')).data.filter((x) => !x.column).length;
   check(
     17,
     'New branch: its settings exist and the page shows them',
-    made.status === 201 && rows === 43 && option === 1 && all.data.length === 172,
+    made.status === 201 && rows === 29 && option === 1 && all.data.length === 172 + 4 * added,
     `status=${made.status} rows=${rows} api=${all.data.length}`,
   );
   globalThis.C = made.data.id;
